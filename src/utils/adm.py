@@ -5,6 +5,10 @@ class Cliente:
         self.__cpf = cpf
         self.compras = []
 
+    def realiza_compra(self, item, valor):
+        itens = {'item': item,'valor': valor}
+        self.compras.append(itens)
+        return self.compras
 
 
 
