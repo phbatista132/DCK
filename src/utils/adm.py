@@ -8,6 +8,7 @@ class Cliente:
     def realiza_compra(self, item, valor):
         itens = {'item': item,'valor': valor}
         self.compras.append(itens)
+
         return self.compras
 
 
