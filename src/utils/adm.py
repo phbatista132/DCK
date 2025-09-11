@@ -1,10 +1,8 @@
 import json
 from datetime import datetime
+from cryptography.fernet import InvalidToken
 
-from cryptography.fernet import Fernet, InvalidToken
 
-chave = Fernet.generate_key()
-fernet = Fernet(chave)
 
 def verifica_cli(cpf, caminho_arq, fernet):
     try:
@@ -15,8 +13,8 @@ def verifica_cli(cpf, caminho_arq, fernet):
 
     for cliente in clientes:
         try:
-            cpf_savlo = fernet.decrypt(cliente['cpf'].enconde()).decode()
-            if cpf_savlo == cpf:
+            cpf_salvo = fernet.decrypt(cliente['cpf'].encode()).decode()
+            if cpf_salvo == cpf:
                 return True
         except InvalidToken:
             continue
@@ -38,10 +36,11 @@ def salvar_cadastro(dados, caminho_arq):
 
 class Cliente:
 
-    def __init__(self, nome, dt_nascimento, endereco, cpf, fernet, caminhojson='clientes.json'):
-        self.clientes = caminhojson
+    def __init__(self, nome, dt_nascimento, endereco, cpf, fernet, caminho_json="C:/Users/phbat/OneDrive/Desktop/DCK/src/clientes.json"):
+        self.clientes = caminho_json
 
         if verifica_cli(cpf, self.clientes, fernet):
+            print("Cliente ja cadastrado")
             self.dados = None
         else:
             self.cadastro ={
@@ -63,14 +62,64 @@ class Cliente:
 
 
 class SistemaAdm:
-    def __init__(self):
-        self.cliente = Cliente
-    @staticmethod
-    def cadastrar_cliente(fernet, caminho_json="clientes.json"):
+    def __init__(self, fernet, descriptografar):
+        self.fernet = fernet
+        self.descriptografar = descriptografar
+
+    def cadastrar_cliente(self, caminho_json="C:/Users/phbat/OneDrive/Desktop/DCK/src/clientes.json"):
         dados = Cliente.dados()
         if dados:
             nome, dt_nascimento, endereco, cpf = dados
-            Cliente(nome, dt_nascimento, endereco, cpf, fernet, caminho_json)
+            cliente = Cliente(nome, dt_nascimento, endereco, cpf, self.fernet, caminho_json)
+            if cliente.dados:
+                print("✅ Cliente cadastrado com sucesso.")
+                return True
+            else:
+                print("⚠️ Cliente já existe na base.")
+                return False
+        else:
+            print("⚠️ Dados inválidos ou incompletos.")
+            return False
+
+    def excluir_cliente(self, cpf, caminho_json="C:/Users/phbat/OneDrive/Desktop/DCK/src/clientes.json"):
+        try:
+            with open(caminho_json, "r", encoding="utf-8") as f:
+                clientes = json.load(f)
+        except (FileNotFoundError, json.JSONDecoder):
+            print("Base não localizada")
+        novos_clientes = []
+        encontrado = False
+
+        for cliente in clientes:
+            cpf_salvo = self.descriptografar(cliente["cpf"], self.fernet)
+            if cpf_salvo == cpf:
+                encontrado = True
+                continue
+            novos_clientes.append(cliente)
+
+        try:
+            if encontrado:
+                with open(caminho_json, "w", encoding="utf-8") as f:
+                    json.dump(novos_clientes, f, indent=4, ensure_ascii=False)
+                print("Cliente excluído com sucesso.")
+                return True
+            else:
+                print("CPF não encontrado.")
+                return False
+        except Exception as e:
+            print(f"Erro ao salvar os dados: {e} ")
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
