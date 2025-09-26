@@ -1,0 +1,116 @@
+from src.controllers import Produto
+import os
+import pandas as pd
+from datetime import date
+
+
+def gerar_arquivo(arquivo = 'C:/Users/phbat/OneDrive/Desktop/DCK/data/estoque.csv'):
+    if not os.path.exists(arquivo):
+        with open(arquivo, mode='w', newline="", encoding='utf-8') as f:
+            pass
+
+
+def data_cadastro():
+    return date.today()
+
+def duplicado(arquivo, nome, modelo, categoria):
+    df = pd.read_csv(arquivo, encoding='utf-8', sep=',')
+    duplicada =  df[(df['nome'] == nome) &
+                    (df['modelo'] == modelo) &
+                    (df['categoria'] == categoria)]
+    return not duplicada.empty
+
+
+class ProdutoController:
+    def __init__(self, produtos_data = 'C:/Users/phbat/OneDrive/Desktop/DCK/data/estoque.csv'):
+        self.produto_model = Produto()
+        self.produtos_data = produtos_data
+
+    def gera_codigo(self) -> int:
+        codigo = 1
+        if os.path.isfile(self.produtos_data) and os.path.getsize(self.produtos_data) > 0:
+            try:
+                df_existente = pd.read_csv(self.produtos_data, )
+                if 'codigo' in df_existente.columns and not df_existente['codigo'].empty and not df_existente['codigo'].isna().all():
+                    codigo = int(df_existente['codigo'].max()) + 1
+                else:
+                    codigo = 1
+
+            except Exception as e:
+                print(f'Erro ao ler csv: {e}')
+
+        return codigo
+
+    def cadastrar_produto(self, nome, modelo, categoria, valor: float, quantidade_estoque: int, vlr_compra: float):
+        try:
+            gerar_arquivo()
+            if self.produto_model.validar_dados(valor, vlr_compra, quantidade_estoque):
+                self.produto_model.dados(nome, modelo, categoria, valor, self.gera_codigo(), quantidade_estoque,data_cadastro(),
+                                         vlr_compra,  self.produto_model.margem_lucro(valor, vlr_compra))
+                if duplicado(self.produtos_data, nome, modelo, categoria):
+                    salvar_produto = pd.DataFrame(self.produto_model.produtos)
+                    arquivo_vazio = not os.path.isfile(self.produtos_data) or os.path.getsize(self.produtos_data) == 0
+                    salvar_produto.to_csv(self.produtos_data, mode='a', header=arquivo_vazio, index=False )
+                    self.produto_model.produtos.clear()
+                    return "✅ Produto cadastrado com sucesso!"
+                else:
+                    return "Produto duplicado, cadastro não realizado"
+
+        except Exception as e:
+            return f'Erro: {e}'
+
+    def editar_produto(self, id_produto, coluna_editada : str, dado_editado):
+        try:
+            df = pd.read_csv(self.produtos_data, encoding='utf-8', sep=',')
+            if id_produto in df['codigo'].values:
+                if coluna_editada in df.columns:
+                    df.loc[df["codigo"] == id_produto, coluna_editada] = dado_editado
+                    df.to_csv(self.produtos_data, index=False, encoding='utf-8')
+                else:
+                    print('Coluna não localizada')
+            else:
+                print('Id não localizado')
+
+        except Exception as e:
+            print(f"Erro ao editar: {e}")
+
+    def busca_produto(self, coluna, dado_busca):
+        try:
+            df = pd.read_csv(self.produtos_data, encoding='utf-8', sep=',')
+            if dado_busca in df.values:
+                if coluna in df.columns:
+                    busca = df[df[coluna] == dado_busca]
+                    return busca
+                else:
+                    return 'Coluna não localizada'
+            else:
+                return 'Produto não localizado'
+        except Exception as e:
+            print(f'Erro ao buscar: {e}')
+
+
+
+    def deletar_produto(self, produto):
+        try:
+            df = pd.read_csv(self.produtos_data, encoding='utf-8', sep=',')
+            if produto in df['nome'].values:
+                produto_info = df[df['nome']==produto].iloc[0]
+                codigo = produto_info['codigo']
+                confirmacao = input(f"Deseja deletar: Produto: {produto} | Código: {codigo}? [S/N] ")
+
+                if confirmacao.lower() == 's':
+                    df = df[df['nome'] != produto]
+                    df.to_csv(self.produtos_data, index=False, encoding='utf-8')
+                    return 'Produto deletado com sucesso!'
+                else:
+                    return "Operação cancelada"
+            else:
+                return 'Produto não localizado'
+        except Exception as e:
+            return f'Falha ao deletar: {e}'
+
+
+
+
+
+

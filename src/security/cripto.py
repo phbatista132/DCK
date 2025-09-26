@@ -17,3 +17,12 @@ def descriptografar(dado_cripto: str, fernet: Fernet) -> str | None:
     except InvalidToken:
         return None
 
+def criptografar(dado: str, fernet: Fernet) -> str | None:
+    try:
+        return fernet.encrypt(dado.encode()).decode()
+    except Exception as e:
+        print(f'Erro: {e}')
+        return None
+
+
+
