@@ -25,11 +25,17 @@ class Produto:
             return False
 
     @staticmethod
-    def margem_lucro(valor_venda, valor_compra) -> float:
+    def margem_lucro(valor_venda, valor_compra):
         if valor_venda == 0:
             return 0
 
-        return ((valor_venda - valor_compra) / valor_compra) * 100
+        margem = ((valor_venda - valor_compra) / valor_compra) * 100
+
+        return round(margem, 2)
+
+    @staticmethod
+    def formato(row):
+        return f'Produto: {row['nome']} | Modelo: {row['modelo']} | Categoria: {row['categoria']}| Valor:  {row['valor']} | Quantidade: {row['quantidade_estoque']}'
 
     def validar_dados(self, valor, valor_compra, quantidade_estoque) -> bool:
 
@@ -41,6 +47,3 @@ class Produto:
             return False
 
         return True
-
-
-

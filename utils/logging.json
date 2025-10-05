@@ -1,0 +1,64 @@
+{
+    "version": 1,
+    "disable_existing_loggers": false,
+    "formatters": {
+        "console_stderr":{
+            "format": "ERR: %(message)s", "datefmt": "[%X]"
+        },
+        "console_stdout":{
+            "format": "OUT: %(message)s", "datefmt": "[%X]"
+        },
+        "meu_formatter": {
+            "()": "src.logs.formatters.JSONLogFormatter"
+        }
+    },
+    "filters": {
+        "max_level_info": {
+            "()":"src.logs.filters.MaxLevelFilter",
+            "max_level": "INFO"
+        }
+    },
+    "handlers": {
+        "console_stdout":{
+            "()":"src.logs.handlers.MyRichHandler",
+            "formatter":"meu_formatter",
+            "rich_tracebacks": true,
+            "tracebacks_show_locals": true,
+            "show_time": true,
+            "show_level": true,
+            "omit_repeated_times": false,
+            "markup":false,
+            "enable_link_path": true,
+            "show_path": true,
+            "level": "DEBUG",
+            "file": "stdout",
+            "filters": ["max_level_info"]
+
+        },
+        "console_stderr":{
+            "()":"src.logs.handlers.MyRichHandler",
+            "formatter":"meu_formatter",
+            "rich_tracebacks": true,
+            "tracebacks_show_locals": true,
+            "show_time": true,
+            "show_level": true,
+            "omit_repeated_times": false,
+            "markup":false,
+            "enable_link_path": true,
+            "show_path": true,
+            "level": "WARNING",
+            "file": "stderr"
+
+        }
+
+    },
+    "root": {
+        "handlers": ["console_stdout", "console_stderr"]
+    },
+    "loggers": {
+        "produto_log": {
+            "level": "DEBUG"
+        }
+    }
+
+}
