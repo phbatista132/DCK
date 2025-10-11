@@ -79,6 +79,7 @@ def write_dotenv(path: Path, json_file_name: str = "logging.conf.json") -> None:
 
 def write_json(path: Path) -> Path:
     path = path.resolve()
+    # Use os importable module paths for custom classes
     data = json.dumps(
         {
             "version": 1,
@@ -88,7 +89,7 @@ def write_json(path: Path) -> Path:
                     "format": "%(levelname)s|%(name)s|%(asctime)s|%(message)s|%(filename)s|%(lineno)d|%(funcName)s|%(module)s|%(process)d|%(processName)s|%(thread)d|%(threadName)s|%(taskName)s"
                 },
                 "json": {
-                    "()": "pylogkit.JSONLogFormatter",
+                    "()": "utils.logkit.formatters.JSONLogFormatter",
                     "include_keys": [
                         "created",
                         "message",
@@ -108,16 +109,17 @@ def write_json(path: Path) -> Path:
                 "console": {"format": "%(message)s", "datefmt": "[%X]"},
             },
             "filters": {
-                "max_level_info": {"()": "pylogkit.MaxLevelFilter", "max_level": "INFO"}
+                "max_level_info": {"()": "utils.logkit.filters.MaxLevelFilter", "max_level": "INFO"}
             },
             "handlers": {
                 "queue": {
                     "class": "logging.handlers.QueueHandler",
-                    "handlers": ["file"],
-                    "respect_handler_level": True,
+                    # NOTE: dictConfig cannot create a QueueListener automatically.
+                    # We attach a QueueListener in code (config_logging._setup_logging).
+                    # The QueueHandler created here will use a queue internally.
                 },
                 "console": {
-                    "()": "pylogkit.MyRichHandler",
+                    "()": "utils.logkit.handlers.MyRichHandler",
                     "formatter": "console",
                     "rich_tracebacks": False,
                     "tracebacks_show_locals": False,
@@ -137,6 +139,7 @@ def write_json(path: Path) -> Path:
                     "maxBytes": 5242880,
                     "backupCount": 5,
                     "encoding": "utf-8",
+                    "level": "INFO",
                 },
             },
             "root": {"handlers": ["console", "queue"]},
@@ -172,6 +175,10 @@ def run() -> None:
         write_dotenv(args.dotenv, json_file_name=json_file.name)
 
     rprint("\n✅ Everything is ready, try running\n")
-    rprint(">>> from pylogkit import get_logger\n")
+    rprint(">>> from utils.logkit.config_logging import get_logger\n")
     rprint('>>> logger = get_logger("mylogger", level="DEBUG")')
     rprint('>>> logger.debug("Your log works")\n')
+
+
+if __name__ == "__main__":
+    run()

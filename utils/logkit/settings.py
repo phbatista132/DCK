@@ -16,13 +16,13 @@ def define_setting[T](value: T, validator: Callable[[T], T] | None = None) -> T:
 
 
 def validate_path_dir(path: Path) -> Path:
-    if not path.is_dir():
+    if not path.exists() or not path.is_dir():
         raise NotADirectoryError(f"Path {path} is not a directory")
     return path
 
 
 def validate_path_file(path: Path) -> Path:
-    if not path.is_file():
+    if not path.exists() or not path.is_file():
         raise FileNotFoundError(f"Path {path} is not a file")
     return path
 
@@ -34,30 +34,38 @@ def validate_level(level: str) -> LogLevel:
     return level
 
 
+# Defaults: note the env var names should match the CLI output
 root_dir = Path(".").resolve()
 logs_dir = root_dir / getenv("LOGS_DIR", "logs")
-logging_config_json = root_dir / getenv("LOGGINF_CONFIG_JSON", "logging.config.json")
+logging_config_json = root_dir / getenv("LOGGING_CONFIG_JSON", "logging.conf.json")
 
-setup_logger_name = getenv("SETUP_LOGGER_NAME", "WARNING")
+setup_logger_name = getenv("SETUP_LOGGER_NAME", "config_setup")
 setup_logger_level = getenv("SETUP_LOGGER_LEVEL", "WARNING")
 
 default_logger_level = getenv("DEFAULT_LOGGER_LEVEL", "WARNING")
 
 
 def validate() -> None:
-    global \
-        root_dir, \
-        logs_dir, \
-        logging_config_json, \
-        setup_logger_name, \
-        setup_logger_level, \
-        default_logger_level
+    """
+    Validate basic settings. This function aims to validate types/values.
+    It expects root_dir to exist. For logs_dir and logging_config_json the
+    existence check is performed where the resources are used (e.g. in config_logging).
+    """
+    global root_dir, logs_dir, logging_config_json, setup_logger_name, setup_logger_level, default_logger_level
+
+    # validate root dir exists
     root_dir = define_setting(root_dir, validator=validate_path_dir)
-    logs_dir = logs_dir / getenv("LOGS_DIR", "logs")
-    logging_config_json = define_setting(root_dir / getenv("LOGGING_CONFIG_JSON", "logging.config.json"),
+
+    # set logs_dir (do not require it exists here; creation happens later)
+    logs_dir = root_dir / getenv("LOGS_DIR", "logs")
+
+    # logging config file (this will raise if not found)
+    logging_config_json = define_setting(root_dir / getenv("LOGGING_CONFIG_JSON", "logging.conf.json"),
                                          validator=validate_path_file)
+
     setup_logger_name = getenv("SETUP_LOGGER_NAME", "config_setup")
-    default_logger_level = define_setting(getenv("SETUP_LOGGER_LEVEL", "WARNING"), validator=validate_level)
+
+    setup_logger_level = define_setting(getenv("SETUP_LOGGER_LEVEL", "WARNING"), validator=validate_level)
     default_logger_level = define_setting(getenv("DEFAULT_LOGGER_LEVEL", "WARNING"), validator=validate_level)
 
 
@@ -65,13 +73,7 @@ def change_settings(new_root: Path | None = None, new_logs_dir: Path | None = No
                     new_logging_config_json: Path | None = None, new_setup_logger_name: str | None = None,
                     new_setup_logger_level: LogLevel | None = None,
                     new_default_logger_level: LogLevel | None = None) -> None:
-    global \
-        root_dir, \
-        logs_dir, \
-        logging_config_json, \
-        setup_logger_name, \
-        setup_logger_level, \
-        default_logger_level
+    global root_dir, logs_dir, logging_config_json, setup_logger_name, setup_logger_level, default_logger_level
 
     if new_root:
         root_dir = define_setting(new_root, validator=validate_path_dir)
