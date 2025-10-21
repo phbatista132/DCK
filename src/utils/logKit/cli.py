@@ -45,10 +45,10 @@ def write_dotenv(path: Path, json_file_name: str = "logging.conf.json") -> None:
     data = textwrap.dedent(f"""\
 
     # PYLOGKIT
-    # Configurações dos logs
-    # Se eu mudar o caminho da pasta de logs, devo lembrar de mudar no arquivo
+    # Configurações dos loggers
+    # Se eu mudar o caminho da pasta de loggers, devo lembrar de mudar no arquivo
     # logging.conf.json.
-    LOGS_DIR=logs
+    LOGS_DIR=loggers
     # Arquivo de configuração do logging em JSON que será convertido em dict
     # e usado com dictConfig
     LOGGING_CONFIG_JSON='{json_file_name}'
@@ -56,7 +56,7 @@ def write_dotenv(path: Path, json_file_name: str = "logging.conf.json") -> None:
     # Nome do logger usado dentro da configuração do logging do Python.
     SETUP_LOGGER_NAME='config_setup'
     # Level do logger usado dentro da configuração do logging do Python.
-    # Dica: Subir para WARNING vai desativar os logs relacionado à configuração
+    # Dica: Subir para WARNING vai desativar os loggers relacionado à configuração
     # do logging
     SETUP_LOGGER_LEVEL='WARNING'
 
@@ -89,7 +89,7 @@ def write_json(path: Path) -> Path:
                     "format": "%(levelname)s|%(name)s|%(asctime)s|%(message)s|%(filename)s|%(lineno)d|%(funcName)s|%(module)s|%(process)d|%(processName)s|%(thread)d|%(threadName)s|%(taskName)s"
                 },
                 "json": {
-                    "()": "utils.logkit.formatters.JSONLogFormatter",
+                    "()": "src.utils.logKit.formatters.JSONLogFormatter",
                     "include_keys": [
                         "created",
                         "message",
@@ -109,7 +109,7 @@ def write_json(path: Path) -> Path:
                 "console": {"format": "%(message)s", "datefmt": "[%X]"},
             },
             "filters": {
-                "max_level_info": {"()": "utils.logkit.filters.MaxLevelFilter", "max_level": "INFO"}
+                "max_level_info": {"()": "utils.logKit.filters.MaxLevelFilter", "max_level": "INFO"}
             },
             "handlers": {
                 "queue": {
@@ -119,7 +119,7 @@ def write_json(path: Path) -> Path:
                     # The QueueHandler created here will use a queue internally.
                 },
                 "console": {
-                    "()": "utils.logkit.handlers.MyRichHandler",
+                    "()": "src.utils.logKit.handlers.MyRichHandler",
                     "formatter": "console",
                     "rich_tracebacks": False,
                     "tracebacks_show_locals": False,
@@ -135,7 +135,7 @@ def write_json(path: Path) -> Path:
                 "file": {
                     "class": "logging.handlers.RotatingFileHandler",
                     "formatter": "json",
-                    "filename": "logs/log.jsonl",
+                    "filename": "loggers/log.jsonl",
                     "maxBytes": 5242880,
                     "backupCount": 5,
                     "encoding": "utf-8",
@@ -175,7 +175,7 @@ def run() -> None:
         write_dotenv(args.dotenv, json_file_name=json_file.name)
 
     rprint("\n✅ Everything is ready, try running\n")
-    rprint(">>> from utils.logkit.config_logging import get_logger\n")
+    rprint(">>> from utils.logKit.config_logging import get_logger\n")
     rprint('>>> logger = get_logger("mylogger", level="DEBUG")')
     rprint('>>> logger.debug("Your log works")\n')
 

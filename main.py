@@ -1,23 +1,16 @@
 from src.controllers.produto_controller import ProdutoController
-from src.controllers.estoque_controller import EstoqueController
-from utils import logger
-import logging
+from src.controllers.venda_controller import VendaController
 
 
 def main():
     sisproduto = ProdutoController()
-    sisestoque = EstoqueController()
+    sisvendas = VendaController()
     while True:
         try:
             opc = int(input('Opção: '))
             if opc == 1:
-                nome = str(input('Nome: '))
-                modelo = str(input('Modelo: '))
-                categoria = str(input('categoria: '))
-                valor = float(input("Valor: ").replace(',', '.'))
-                quantidade = int(input('Quantidade: '))
-                vl_compra = float(input('Valor compra: ').replace(',', '.'))
-                print(sisproduto.cadastrar_produto(nome, modelo, categoria, valor , quantidade, vl_compra))
+                print(sisvendas.total_compra())
+
             elif opc == 2:
                 id_produto = int(input('ID: '))
                 coluna = str(input('Coluna: '))
@@ -25,16 +18,19 @@ def main():
                 sisproduto.editar_produto(id_produto, coluna, dado)
 
             elif opc == 3:
-                coluna =  str(input('Filtra por: '))
-                dado_busca = input('Produto: ')
-                print(sisproduto.busca_produto(coluna, dado_busca))
+                id_produto = int(input("ID Produto"))
+                print(sisproduto.desabilitar_produto(id_produto))
+
             elif opc == 4:
                 produto = int(input('ID Produto: '))
                 quantidade = int(input('Quantidade para venda: '))
-                print(sisestoque.disponibilidade(produto, quantidade))
+                print(sisvendas.adicionar_item(produto, quantidade))
 
             elif opc == 5:
-                print(sisproduto.total_produtos())
+                cliente_id = int(input('Cliente: '))
+                forma_pagamento = str(input('Forma de pagamento: '))
+                print(sisvendas.finalizar_venda(cliente_id, forma_pagamento))
+
             elif opc == 0:
                 print('Saindo do programa!')
                 break
@@ -45,12 +41,5 @@ def main():
             print(f"Erro:  {e}")
 
 
-
-if __name__ == '__main__':
-    logger.setup()
-    logger = logging.getLogger("produto_log")
-    logger.debug("msg")
-    logger.info("msg")
-    logger.warning("msg")
-    logger.error("msg")
-    logger.critical("msg")
+if __name__ == "__main__":
+    main()

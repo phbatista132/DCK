@@ -1,33 +1,27 @@
-import pandas as pd
-from src.utils import SistemaAdm, Produto
-from logging import log
+from typing import TypedDict, List
+from datetime import datetime
+
+
+class ItemVenda(TypedDict):
+    produto_id: int
+    quantidade: int
+    preco_unitario: float
+    subtotal: float
 
 
 class Vendas:
     def __init__(self):
-        self.cliente = SistemaAdm
-        self.obter_estoque = Produto.estoque
+        self.vendas = []
 
-    def venda(self, codigo, quantidade):
-        df = self.obter_estoque()
-        if codigo not in df['codigo'].values:
-            print('Codigo não localizado')
-            return
-
-        if quantidade <= 0:
-            print("Quantidade menor que 0, impossivel seguir com a compra")
-            return
-
-        estoque_atual = df.loc[df['codigo'] == codigo, 'quantidade'].values[0]
-        if quantidade > estoque_atual:
-            print(f'Estoque insuficiente! Estoque: {estoque_atual}')
-            return
-
-
-        df.loc[df['codigo'] == codigo, 'quantidade'] -= quantidade
-
-        #Verificar chamada do init self.obter_estoque, retorna erro de method ou function
-        df.to_csv(self.obter_estoque(), index=False, encoding='utf-8')
-
-        print(f"✅ Compra do item finalizada com sucesso.")
-
+    def dados_vendas(self, id_venda: int, data: datetime, cliente_id: int | None, itens: List[ItemVenda], total: float,
+                     desconto: float, forma_pagamento:str):
+        self.vendas.append({
+            "id_venda": id_venda,
+            "data": data,
+            "cliente_id": cliente_id,
+            "itens": itens,
+            "total": total,
+            "desconto": desconto,
+            "forma_pagamento": forma_pagamento,
+            "status": "finalizada"
+        })

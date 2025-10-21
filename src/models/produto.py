@@ -2,7 +2,7 @@ class Produto:
     def __init__(self):
         self.produtos = []
 
-    def dados(self, nome, modelo, categoria, valor, codigo, estoque, dt_cadastro, vlr_compra, margem_lucro):
+    def dados(self, nome, modelo, categoria, valor, codigo, estoque, dt_cadastro, vlr_compra, margem_lucro, ativo=True):
         self.produtos.append({
             'nome': nome,
             'modelo': modelo,
@@ -12,7 +12,8 @@ class Produto:
             'quantidade_estoque': estoque,
             'data_cadastro': dt_cadastro,
             'vlr_compra': vlr_compra,
-            'margem_lucro': margem_lucro
+            'margem_lucro': margem_lucro,
+            'ativo': ativo
         })
 
     @staticmethod
