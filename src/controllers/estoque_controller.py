@@ -73,7 +73,7 @@ class EstoqueController:
             estoque_real = df.loc[df['codigo'] == produto, 'quantidade_estoque'].values[0]
             disponivel = estoque_real - self.reservas[produto]
 
-            if disponivel >= quantidade:
+            if disponivel > quantidade:
                 self.reservas[produto] += quantidade
                 self.estoque_log.info(
                     f"Reserva confirmada: {quantidade} unidades do produto {produto} (disponível: {disponivel})")

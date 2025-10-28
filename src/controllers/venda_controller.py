@@ -1,11 +1,12 @@
-import os.path
-from src.models.vendas import Vendas
-from src.config import PRODUTOS_DATA, VENDAS_DIR
-from src.utils.logKit.config_logging import get_logger
-from src.utils.file_helpers import gerar_arquivo, verificar_aquivo_vazio
-from datetime import datetime
-from src.controllers import EstoqueController
 import pandas as pd
+from datetime import datetime
+from decimal import Decimal, ROUND_DOWN
+from src.models.vendas import Vendas
+from src.controllers import EstoqueController
+from src.utils.file_helpers import gerar_arquivo, verificar_arquivo_vazio
+from src.utils.logKit.config_logging import get_logger
+from src.config import PRODUTOS_DATA, VENDAS_DIR, ITENS_VENDAS_DIR
+
 
 
 class VendaController:
@@ -16,10 +17,12 @@ class VendaController:
         self.estoque = EstoqueController()
         self.estoque_data = PRODUTOS_DATA
         self.vendas_data = VENDAS_DIR
+        self.itens_venda_data = ITENS_VENDAS_DIR
 
     def venda_id(self) -> int:
+        """Gera ID único para venda"""
         id_venda = 1
-        if os.path.isfile(self.vendas_data) and os.path.getsize(self.vendas_data) > 0:
+        if not verificar_arquivo_vazio(self.vendas_data):
             try:
                 df_existente = pd.read_csv(self.vendas_data, encoding='utf-8', sep=',')
                 if 'id_venda' in df_existente.columns and not df_existente['id_venda'].empty and not df_existente[
@@ -88,7 +91,7 @@ class VendaController:
                 self.vendas_log.warning(f"Produto: {produto_id} não está no carrinho")
                 return f"Item não encotrado no carrinho"
 
-            self.estoque.liberar_reserva(item['codigo'], item['quantidade'])
+            self.estoque.liberar_reserva(item['produto_id'], item['quantidade'])
 
             self.carrinho.remove(item)
 
@@ -107,7 +110,20 @@ class VendaController:
 
         return sum(total)
 
-    def finalizar_venda(self, client_id: int | None, forma_pagamento="Debito", desconto=0):
+    def aplicar_desconto(self, desconto: float) -> tuple[bool, float]:
+        if desconto <= 0:
+            return False, 0
+
+        if desconto > 100:
+            self.vendas_log.warning(f"Desconto inválido: {desconto}%")
+            return False, 0.0
+
+        valor_desconto = self.total_compra() * (desconto / 100)
+        formatado = Decimal(str(valor_desconto)).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+
+        return True ,float(formatado)
+
+    def finalizar_venda(self, client_id: int | None, forma_pagamento="Debito", desconto: float = 0):
         try:
             gerar_arquivo(self.vendas_data)
 
@@ -116,13 +132,19 @@ class VendaController:
                 return "Carrrinho vazio"
 
             codigo = self.venda_id()
+            valor_total = self.total_compra()
+
+            descontar, valor = self.aplicar_desconto(desconto)
+            if descontar:
+                valor_total -= valor
+
             self.vendas_model.dados_vendas(id_venda=codigo, data=datetime.now(), cliente_id=client_id,
-                                           itens=self.carrinho, total=self.total_compra(),
-                                           forma_pagamento=forma_pagamento, desconto=desconto)
+                                           itens=self.carrinho, total=valor_total,
+                                           forma_pagamento=forma_pagamento, desconto=valor)
             self.vendas_log.debug("Dados de venda recebidos")
 
             registra_venda = pd.DataFrame(self.vendas_model.vendas)
-            arquivo_vazio = verificar_aquivo_vazio(self.vendas_data)
+            arquivo_vazio = verificar_arquivo_vazio(self.vendas_data)
             registra_venda.to_csv(self.vendas_data, mode='a', encoding="utf-8", sep=",", header=arquivo_vazio,
                                   index=False)
 

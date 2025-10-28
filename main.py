@@ -1,25 +1,30 @@
 from src.controllers.produto_controller import ProdutoController
 from src.controllers.venda_controller import VendaController
+from src.controllers.cliente_controller import ClienteController
 
 
 def main():
     sisproduto = ProdutoController()
     sisvendas = VendaController()
+    siscliente = ClienteController()
     while True:
         try:
             opc = int(input('Opção: '))
             if opc == 1:
-                print(sisvendas.total_compra())
+               cpf=input("CPF: ")
+               print(siscliente.excluir_cliente(cpf))
 
             elif opc == 2:
-                id_produto = int(input('ID: '))
-                coluna = str(input('Coluna: '))
-                dado = input('dado para alteração: ')
-                sisproduto.editar_produto(id_produto, coluna, dado)
+                nome = input("Nome: ")
+                dt_nascimento = input("Data de nascimento: ")
+                cpf = input("CPF: ")
+                endereco = input("Endereço: ")
+                telefone = input("Telefone: ")
+                print(siscliente.cadastrar_cliente(nome, dt_nascimento, cpf, endereco, telefone))
 
             elif opc == 3:
-                id_produto = int(input("ID Produto"))
-                print(sisproduto.desabilitar_produto(id_produto))
+                cpf = input("CPF: ")
+                print(siscliente.buscar_cliente(cpf))
 
             elif opc == 4:
                 produto = int(input('ID Produto: '))

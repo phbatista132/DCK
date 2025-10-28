@@ -3,20 +3,12 @@ import pandas as pd
 from datetime import date
 from src.models.produto import Produto
 from src.utils.logKit.config_logging import get_logger
-from src.utils.file_helpers import gerar_arquivo, verificar_aquivo_vazio
+from src.utils.file_helpers import gerar_arquivo, verificar_aquivo_vazio,  duplicado
 from src.config import PRODUTOS_DATA
 
 
 def data_cadastro():
     return date.today()
-
-
-def duplicado(arquivo, nome, modelo, categoria) -> bool:
-    df = pd.read_csv(arquivo, encoding='utf-8', sep=',')
-    duplicada = df[(df['nome'] == nome) &
-                   (df['modelo'] == modelo) &
-                   (df['categoria'] == categoria)]
-    return duplicada.empty
 
 
 class ProdutoController:
@@ -49,7 +41,7 @@ class ProdutoController:
                 self.produto_log.warning(f"Validacao falhou para o produto: {nome}")
                 return "Dados Invalidos"
 
-            if not duplicado(self.produtos_data, nome, modelo, categoria):
+            if not duplicado(self.produtos_data, nome=nome, modelo=modelo, categoria=categoria):
                 self.produto_log.warning(f"Produto {nome} ja existe")
                 return "Produto ja cadastrado"
 
@@ -70,7 +62,6 @@ class ProdutoController:
         except Exception as e:
             self.produto_log.exception(f'Erro: {e}')
             return f'Erro: {e}'
-
 
     def editar_produto(self, id_produto, coluna_editada: str, dado_editado):
         try:
@@ -95,7 +86,6 @@ class ProdutoController:
         except Exception as e:
             self.produto_log.exception(f'Erro ao editar produto {id_produto}')
             return f"Erro ao editar: {e}"
-
 
     def busca_produto(self, coluna, dado_busca):
         try:
@@ -144,7 +134,6 @@ class ProdutoController:
             self.produto_log.exception(f"Erro ao deletar produto: {idbusca}")
             return f'Falha ao desativar: {e}'
 
-
     def filtro_categoria(self, categoria):
         try:
             df = pd.read_csv(self.produtos_data, encoding='utf-8', sep=',')
@@ -163,13 +152,11 @@ class ProdutoController:
         except Exception as e:
             return f'Erro ao filtrar: {e}'
 
-
     def total_produtos(self):
         df = pd.read_csv(self.produtos_data, encoding='utf-8', sep=',')
         total_cadastrado = df['codigo'].nunique()
         self.produto_log.info(f"Total de produtos: {total_cadastrado}")
         return f'Total de produtos cadastrados: {total_cadastrado}'
-
 
     def produtos_categoria(self):
         df = pd.read_csv(self.produtos_data, encoding='utf-8', sep=',')

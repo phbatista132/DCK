@@ -18,12 +18,7 @@ class Produto:
 
     @staticmethod
     def valor_positivo(valor: float) -> bool:
-        if valor >= 0:
-
-            return True
-        else:
-
-            return False
+        return True if valor >= 0 else False
 
     @staticmethod
     def margem_lucro(valor_venda, valor_compra):
