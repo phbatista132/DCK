@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import pandas as pd
 import json
+from src.config import PRODUTOS_DATA
 
 def gerar_arquivo(arquivo: Path) -> bool:
     if not arquivo.exists():
@@ -10,8 +11,10 @@ def gerar_arquivo(arquivo: Path) -> bool:
         return True
     return False
 
-def verificar_arquivo_vazio(arquivo: Path):
-    return not arquivo.exists() or os.path.getsize(arquivo) == 0
+def verificar_arquivo_vazio(arquivo: Path) -> bool:
+    if not arquivo.exists():
+        return True  # Arquivo não existe → considerado "vazio"
+    return os.path.getsize(arquivo) == 0  # Retorna True se o tamanho for 0
 
 
 def duplicado(arquivo, **kwargs) -> bool:
@@ -37,7 +40,4 @@ def duplicado(arquivo, **kwargs) -> bool:
             return True
 
     return False
-
-
-
 

@@ -1,4 +1,6 @@
 import json
+from datetime import date
+from typing import Optional
 from src.models.cliente import Cliente
 from src.config import CLIENTES_DIR
 from src.utils.file_helpers import gerar_arquivo, duplicado, verificar_arquivo_vazio
@@ -9,7 +11,7 @@ from src.utils.validators import validar_cpf, maior_idade
 class ClienteController:
     def __init__(self):
         self.cliente_data = CLIENTES_DIR
-        self.cliente_model = Cliente()
+        self.cliente_model = Cliente
         self.cliente_log = get_logger("loggerClienteController", "DEBUG")
 
     def gera_id_cliente(self):
@@ -31,16 +33,16 @@ class ClienteController:
         except (json.JSONDecodeError, ValueError):
             return 1
 
-    def cadastrar_cliente(self, nome: str, dt_nascimento: str, cpf: str, endereco: str, telefone: str):
+    def cadastrar_cliente(self, nome: str, dt_nascimento: date, cpf: str, endereco: str, telefone: str):
         try:
             gerar_arquivo(self.cliente_data)
-            self.cliente_log.debug(f"Cadastrando cliente {nome}")
+
             if not validar_cpf(cpf):
                 self.cliente_log.warning("CPF inserido e invalido")
                 return "CPF incorreto ou invalido"
 
             if not maior_idade(dt_nascimento):
-                self.cliente_log.warning(f"Cliente menor de idade {nome}")
+                self.cliente_log.warning("Cliente menor de idade")
                 return "Cliente menor de idade"
 
             if duplicado(self.cliente_data, cpf=cpf):
@@ -48,11 +50,18 @@ class ClienteController:
                 return "Cliente ja cadastrado"
 
             id_cliente = self.gera_id_cliente()
-            self.cliente_model.dados_cliente(id_cliente, nome, dt_nascimento, cpf, endereco, telefone, ativo=True)
+            cliente = Cliente(
+                id_cliente=id_cliente,
+                nome=nome,
+                cpf=cpf,
+                dt_nascimento=dt_nascimento,
+                telefone=telefone,
+                endereco=endereco,
+            )
             with open(self.cliente_data, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(self.cliente_model.cliente, ensure_ascii=False) + '\n')
+                f.write(json.dumps(cliente.to_dict(), ensure_ascii=False) + '\n')
 
-            self.cliente_model.cliente.clear()
+
             self.cliente_log.info(f"Cliente: {nome} cadastrado (ID: {id_cliente})")
             return "Cliente cadastrado com sucesso"
 
@@ -60,38 +69,30 @@ class ClienteController:
             self.cliente_log.exception(f"Erro ao cadastrar cliente: {nome}")
             return f"Erro : {e}"
 
-    def buscar_cliente(self, cpf: str) -> dict | str:
+    def buscar_cliente(self, cpf: str) -> Optional[Cliente]:
         try:
-            self.cliente_log.debug(f"Buscando cliente {cpf}")
-
             if verificar_arquivo_vazio(self.cliente_data):
-                self.cliente_log.warning("Arquivo vazio")
-                return "Sem clientes cadastrados"
-
-            with open(self.cliente_data, "r", encoding='utf-8') as f:
+                return None
+            with open(self.cliente_data, 'r', encoding='utf-8') as f:
                 clientes = [json.loads(line) for line in f if line.strip()]
                 busca = next((c for c in clientes if c['cpf'] == cpf), None)
 
                 if busca is None:
-                    self.cliente_log.warning(f"Cliente não encontrado")
-                    return f"Cliente não encontrado"
+                    return None
 
-            self.cliente_log.info("Busca para o CPF concluida")
-            return busca
+            return Cliente.from_dict(busca)
 
         except Exception as e:
             self.cliente_log.exception(f"Erro ao buscar cliente")
-            return f"Erro: {e}"
+            return None
 
     def editar_cadastro(self, cpf, **kwargs) -> str:
         try:
-            self.cliente_log.debug(f"Editando cliente {cpf}")
-
             alteracoes_permitidas = ["telefone", "endereco"]
 
             for k, v in kwargs.items():
                 if k not in alteracoes_permitidas:
-                    self.cliente_log.warning(f"Dado: {k} não permitodo para alteração")
+                    self.cliente_log.warning(f"Campo: {k} não permitodo para alteração")
                     return "Dado não pemitido para alteração"
 
             with open(self.cliente_data, "r", encoding='utf-8') as f:
@@ -105,13 +106,16 @@ class ClienteController:
                     break
 
             if not encontrado:
+                self.cliente_log.warning(f"Cliente {cpf} não encontrado")
                 return "Cliente não encontrado"
 
             with open(self.cliente_data, "w", encoding='utf-8') as f:
                 for cliente in clientes:
                     f.write(json.dumps(cliente, ensure_ascii=False) + '\n')
+
             self.cliente_log.info(f"Dados alterados com sucesso")
             return "Dados alterados com sucesso"
+
         except Exception as e:
             self.cliente_log.exception(f"Erro ao editar cliente")
             return f"Erro: {e}"
@@ -149,7 +153,6 @@ class ClienteController:
 
     def listar_clientes(self):
         try:
-            self.cliente_log.debug(f"Listando clientes")
             if verificar_arquivo_vazio(self.cliente_data):
                 self.cliente_log.warning("Arquivo vazio")
                 return "Sem clientes cadastrados"
@@ -158,8 +161,9 @@ class ClienteController:
             with open(self.cliente_data, "r", encoding='utf-8') as f:
                 for line in f:
                     if line.strip():
-                        cliente = json.loads(line)
-                        if cliente.get('ativo'):
+                        cliente_dict = json.loads(line)
+                        if cliente_dict.get('ativo'):
+                            cliente = Cliente.from_dict(cliente_dict)
                             cliente_ativos.append(cliente)
 
             return cliente_ativos
