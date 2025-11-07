@@ -33,7 +33,7 @@ class EstoqueController:
             self.estoque_log.info(
                 f"Reserva expirada automaticamente: Produto {produto_id}" f"{qtd_liberada} unidades liberadas")
 
-    def reposicao(self, id_item: int, qtd: int) -> str:
+    def repor_estoque(self, id_item: int, qtd: int) -> str:
         """Adiciona quantidade ao estoque"""
         try:
             self.estoque_log.debug(f"Repondo produto {id_item} Quantidade {qtd}")
@@ -56,11 +56,11 @@ class EstoqueController:
             self._salvar_estoque(df)
             self.estoque_log.info(f"Produto {nome_produto}: {qtd_anterior} -> {qtd_anterior + qtd} unidades")
 
-            return f"Estoque do item {nome_produto} reposto"
+            return f"Item reposto"
 
         except Exception as e:
             self.estoque_log.exception("Erro ao repor estoque")
-            return f'Erro: {e}'
+            return f'Erro interno ao repor estoque'
 
     def produto_habilitado(self, id_produto: int) -> tuple[bool, str]:
         """Verifica se produto esta habilitado"""
@@ -126,10 +126,10 @@ class EstoqueController:
             df = self._carregar_estoque()
 
             if produto_id not in self.reservas:
-                self.reservas[produto_id] = {'quantiade': 0, 'expira_em': None}
+                self.reservas[produto_id] = {'quantidade': 0, 'expira_em': None}
 
             estoque_real = df.loc[df['codigo'] == produto_id, 'quantidade_estoque'].values[0]
-            reservado = self.reservas[produto_id]['quantidade']
+            reservado = self.reservas.get(produto_id, {}).get('quantidade', 0)
             disponivel = estoque_real - reservado
 
             if disponivel >= quantidade:
@@ -185,7 +185,7 @@ class EstoqueController:
 
             idx = df[df['codigo'] == id_produto].index[0]
             nome_produto = df.loc[idx, 'nome']
-            estoque_atual = int(df.loc[idx, 'quantidade_estoque'].values[0])
+            estoque_atual = int(df.loc[idx, 'quantidade_estoque'])
 
             if estoque_atual < quantidade:
                 self.estoque_log.error(

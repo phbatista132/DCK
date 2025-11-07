@@ -1,9 +1,12 @@
 from src.controllers.produto_controller import ProdutoController
 from src.controllers.venda_controller import VendaController
 from src.controllers.cliente_controller import ClienteController
+from src.controllers.estoque_controller import EstoqueController
+
 
 
 def main():
+    sisestoque = EstoqueController()
     sisproduto = ProdutoController()
     sisvendas = VendaController()
     siscliente = ClienteController()
@@ -46,6 +49,28 @@ def main():
                 coluna = input("Coluna: ")
                 dado = input("Dado: ")
                 print(sisproduto.busca_produto(coluna, dado))
+            elif opc == 10:
+                cpf = input("CPF: ")
+                print(siscliente.buscar_cliente(cpf))
+            elif opc ==11:
+                nome = input("Nome: ")
+                cpf = str(input("CPF: "))
+                dt_nascimento = input("Data de nascimento: ")
+                telefone = input("Telefone: ")
+                endereco = input("Endereco: ")
+                print(siscliente.cadastrar_cliente(nome,dt_nascimento, cpf, telefone, endereco))
+            elif opc == 12:
+                cpf = input("CPF: ")
+                print(siscliente.desativar_cliente(cpf))
+            elif opc == 13:
+                cpf = input("CPF: ")
+                print(siscliente.editar_cadastro(cpf, nome="Pablo Henrique"))
+            elif opc == 14:
+                print(siscliente.listar_clientes())
+            elif opc == 15:
+                id_produto = int(input("ID Produto: "))
+                quantidade = int(input("Quantidade: "))
+                print(sisestoque.repor_estoque(id_produto, quantidade))
             elif opc == 0:
                 print("Programa finalizado")
                 break

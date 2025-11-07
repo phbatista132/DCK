@@ -3,6 +3,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_DOWN
 
+
 @dataclass
 class ItemVenda:
     produto_id: int
@@ -15,7 +16,12 @@ class ItemVenda:
         if self.quantidade <= 0:
             raise ValueError("Quantidade deve ser positiva")
         if self.preco_unitario < 0:
-            raise ValueError("Preço unitario não pode ser negativo")
+            raise ValueError("Preço unitário não pode ser negativo")
+
+        self.subtotal = float(
+            Decimal(str(self.quantidade * self.preco_unitario)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+        )
+
 
 @dataclass
 class Venda:
@@ -35,22 +41,21 @@ class Venda:
         if not self.itens:
             raise ValueError("Venda deve ter pelo menos um item")
 
-        self.subtotal = self._calcular_subtota()
+        self.subtotal = float(Decimal(str(self._calcular_subtotal())).quantize(Decimal('0.01'), rounding=ROUND_DOWN))
         self.total = self.subtotal
 
         if self.data_finalizacao is None:
             self.data_finalizacao = datetime.now()
 
-    def _calcular_subtota(self) -> float:
+    def _calcular_subtotal(self) -> float:
         return  sum(item.subtotal for item in self.itens)
 
     def aplicar_desconto(self, percentual: float) -> float:
         if not (0 <= percentual <= 100):
             raise ValueError("Desconto deve estar entre 0 e 100")
 
-        valor_desconto = self.total * (percentual / 100)
-        formatado = Decimal(str(valor_desconto)).quantize(Decimal("0.00"), rounding=ROUND_DOWN)
-        self.desconto = float(formatado)
+        valor_desconto = self.subtotal * (percentual / 100)
+        self.desconto = float(Decimal(str(valor_desconto)).quantize(Decimal("0.00"), rounding=ROUND_DOWN))
 
         self.total = self.subtotal - self.desconto
 
@@ -65,6 +70,7 @@ class Venda:
         return {
             "id_venda": self.id_venda,
             "data": self.data_hora.isoformat(),
+            "cliente_id": self.cliente_id,
             "itens": self.itens,
             "subtotal": self.subtotal,
             "total": self.total,

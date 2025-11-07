@@ -1,5 +1,6 @@
 import pandas as pd
 from datetime import datetime
+from decimal import Decimal, ROUND_DOWN
 from src.models.vendas import Venda, ItemVenda
 from src.controllers import EstoqueController, ClienteController
 from src.utils.file_helpers import gerar_arquivo, verificar_arquivo_vazio
@@ -41,9 +42,9 @@ class VendaController:
                 self.vendas_log.warning(f"Produto {produto_id} não encontrado")
                 return "Produto não encontrado"
 
-            idx = df["codigo"] == produto_id
-            preco_unitario = df.loc[idx, 'valor'].values[0]
-            nome_produto = df.loc[idx, 'nome'].values[0]
+            idx = df[df["codigo"] == produto_id].index[0]
+            preco_unitario = df.loc[idx, 'valor']
+            nome_produto = df.loc[idx, 'nome']
 
             habilitado, msg = self.estoque.produto_habilitado(produto_id)
             if not habilitado:
@@ -155,15 +156,16 @@ class VendaController:
             cliente_id = None
             if cpf_cliente:
                 cliente = self.cliente.buscar_cliente(cpf=cpf_cliente)
-                if isinstance(cliente, dict):
-                    if not cliente.get('status', False):
-                        self.vendas_log.warning(f"Cliente {cpf_cliente} está inativo")
-                        return "Cliente inativo, sem possibilidade de vincular compra"
-                    cliente_id = cliente['id_cliente']
-                else:
+
+                if cliente is None:
                     self.vendas_log.warning(f"Cliente {cpf_cliente} não encontrado")
                     return "Cliente não encontrado"
 
+                if not getattr(cliente,'ativo', False):
+                    self.vendas_log.warning(f"Cliente {cpf_cliente} está inativo")
+                    return "Cliente inativo, sem possibilidade de vincular compra"
+
+                cliente_id = cliente.id_cliente
 
             itens_venda = [
                 ItemVenda(produto_id=item['produto_id'], nome_produto=item['nome'],

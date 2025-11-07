@@ -33,7 +33,7 @@ def validar_cpf(cpf: str) -> bool:
         return False
 
 
-def maior_idade(dt_nascimento: date) -> bool:
+def maior_idade(dt_nascimento: str) -> bool:
     """
     Verifica se a pessoa tem 18 anos ou mais
 
@@ -45,10 +45,11 @@ def maior_idade(dt_nascimento: date) -> bool:
     """
     try:
         hoje = datetime.today()
+        dt = datetime.strptime(dt_nascimento, "%d/%m/%Y").date()
 
-        idade = hoje.year - dt_nascimento.year
+        idade = hoje.year - dt.year
 
-        if (hoje.month, hoje.day) < (dt_nascimento.month, dt_nascimento.day):
+        if (hoje.month, hoje.day) < (dt.month, dt.day):
             idade -= 1
 
         return idade >= 18

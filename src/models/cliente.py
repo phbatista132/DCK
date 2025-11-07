@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 
@@ -26,8 +26,8 @@ class Cliente:
 
         self.cpf = ''.join(filter(str.isdigit, self.cpf))
 
-        if len(self.cpf) != 11:
-            raise ValueError("CPF deve ter 11 digitos")
+        if not self.cpf.isdigit() or len(self.cpf) != 11:
+            raise ValueError("CPF deve ter 11 dígitos")
 
     def calcular_idade(self) -> int:
         hoje = date.today()
@@ -51,7 +51,7 @@ class Cliente:
             'id_cliente': self.id_cliente,
             'nome': self.nome,
             'cpf': self.cpf,
-            'dt_nascimento': self.dt_nascimento if isinstance(self.dt_nascimento, date) else self.dt_nascimento,
+            'dt_nascimento': self.dt_nascimento.strftime("%d/%m/%Y") if isinstance(self.dt_nascimento, date) else self.dt_nascimento,
             'telefone': self.telefone,
             'endereco': self.endereco,
             'ativo': self.ativo,
@@ -65,7 +65,7 @@ class Cliente:
             id_cliente=data['id_cliente'],
             nome=data['nome'],
             cpf=data['cpf'],
-            dt_nascimento=date.fromisoformat(data['dt_nascimento']) if isinstance(data['dt_nascimento'], str) else data['dt_nascimento'],
+            dt_nascimento= datetime.strptime(data['dt_nascimento'], "%d/%m/%Y").date() if isinstance(data['dt_nascimento'], str) else data['dt_nascimento'],
             telefone=data['telefone'],
             endereco=data['endereco'],
             ativo=data.get('ativo', True),

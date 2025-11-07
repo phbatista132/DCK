@@ -30,7 +30,7 @@ class Produto:
         """Calcula o valor da margem de lucro"""
         if self.vlr_compra == 0:
             return 0.0
-        return round(((self.vlr_compra * self.margem_lucro)/ self.vlr_compra) * 100, 2)
+        return round((self.valor - self.vlr_compra) / self.vlr_compra * 100,2)
 
     def desativar(self) -> None:
         """Desativar produto"""
