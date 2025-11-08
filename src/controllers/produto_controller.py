@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from typing import List
 from datetime import date
 from src.models.produto import Produto
 from src.utils.logKit.config_logging import get_logger
@@ -106,7 +107,7 @@ class ProdutoController:
             editar_produto(1, nome="Notebook Dell", valor=3500.0)
         """
         try:
-            coluna_editaveis = ['nome', 'modelo', 'valor', 'vlr_compra', 'quantidade_estoque']
+            coluna_editaveis = ['nome', 'modelo', 'valor', 'vlr_compra']
 
             for coluna in kwargs.keys():
                 if coluna not in coluna_editaveis:
@@ -149,7 +150,7 @@ class ProdutoController:
             self.produto_log.exception(f'Erro ao editar produto {id_produto}')
             return f"Erro ao editar: {e}"
 
-    def busca_produto(self, coluna:str, dado_busca: str)-> str:
+    def busca_produto(self, coluna:str, dado_busca: str)-> str | List:
         """Busca produtos por coluna e retorna string formatada"""
         try:
             df = pd.read_csv(self.produtos_data, encoding='utf-8', sep=',')
@@ -172,8 +173,7 @@ class ProdutoController:
                 resultado.append(linha)
 
             self.produto_log.info(f"Encontrado {len(resultado)} produtos")
-            return '\n'.join(resultado)
-
+            return resultado
         except Exception as e:
             self.produto_log.exception(f"Erro ao localizar dado '{dado_busca}'")
             return f'Erro ao buscar: {e}'
@@ -203,7 +203,7 @@ class ProdutoController:
         """Filtra produtos por categoria"""
         try:
             df = self._carregar_produtos()
-            df_filtrado = df[df['categoria'] == categoria]
+            df_filtrado = df[(df['categoria'] == categoria) & df['ativo']]
 
             if df_filtrado.empty:
                 return f"Nenhum produto encontrado na categoria: {categoria}"

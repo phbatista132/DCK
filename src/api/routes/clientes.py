@@ -6,10 +6,10 @@ from src.api.schemas import ClienteCreate, ClienteUpdate, ClienteResponse
 
 
 cliente_router = APIRouter(prefix="/clients", tags=["clients"])
-endpoint_cliente_log = get_logger("endpoints", "ERROR")
+endpoint_cliente_log = get_logger("endpoints_produto", "ERROR")
 
 
-@cliente_router.post("/", status_code=status.HTTP_201_CREATED)
+@cliente_router.post("/register", status_code=status.HTTP_201_CREATED)
 async def cliente_register(cliente: ClienteCreate):
     """
     Cadastra novo cliente no sistema
@@ -31,7 +31,7 @@ async def cliente_register(cliente: ClienteCreate):
                 }
             }
         else:
-            raise HTTPException(status_code=400, detail=resultado)
+            raise HTTPException(status_code=409, detail=resultado)
 
     except HTTPException:
         raise
@@ -103,7 +103,7 @@ async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate):
 
 
 @cliente_router.delete("/disable")
-async def cliente_desabilitar(cpf: str):
+async def cliente_disabled(cpf: str):
     """
     Desativa cliente (soft delete)
 
@@ -128,7 +128,7 @@ async def cliente_desabilitar(cpf: str):
         raise HTTPException(status_code=500, detail="Erro interno ao desativar cliente")
 
 @cliente_router.get("", response_model=List[ClienteResponse])
-async def cliente_listar_clientes(
+async def list_clients(
     skip: int = Query(0, ge=0, description="Numero de registros a pular"),
     limit: int = Query(100, ge=1, le=1000, description="Maximo de registros")
 ):
