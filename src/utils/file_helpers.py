@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import pandas as pd
 import json
-from src.config import PRODUTOS_DATA
+
 
 def gerar_arquivo(arquivo: Path) -> bool:
     if not arquivo.exists():
@@ -10,6 +10,7 @@ def gerar_arquivo(arquivo: Path) -> bool:
         arquivo.touch()
         return True
     return False
+
 
 def verificar_arquivo_vazio(arquivo: Path) -> bool:
     if not arquivo.exists():
@@ -19,7 +20,6 @@ def verificar_arquivo_vazio(arquivo: Path) -> bool:
 
 def duplicado(arquivo, **kwargs) -> bool:
     extensao = os.path.splitext(arquivo)[1].lower()
-
 
     if extensao == '.csv':
         dados = pd.read_csv(arquivo, encoding='utf-8', sep=',').to_dict(orient='records')
@@ -40,4 +40,3 @@ def duplicado(arquivo, **kwargs) -> bool:
             return True
 
     return False
-

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api.routes import clientes, produtos, vendas, estoque
+from src.api.routes import clientes, produtos, vendas, estoque, auth
+
 app = FastAPI(title="API Sistema de Loja", description="API REST para gerenciamento de loja", version="1.0.0")
 # uvicorn src.api.app:app --reload
 
@@ -12,6 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.auth_router)
 app.include_router(clientes.cliente_router)
 app.include_router(produtos.produtos_router)
 app.include_router(vendas.vendas_router)
@@ -20,10 +22,14 @@ app.include_router(estoque.estoque_router)
 
 @app.get("/")
 async def root():
-    """Healt check"""
     return {
-        "status": "Online",
-        "message": "API Sistema de loja",
-        "version": "1.0.0",
-        "docs": "/docs"
-            }
+        "message": "Sistema de Loja API",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "authentication": "JWT Bearer Token"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}

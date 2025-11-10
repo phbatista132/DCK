@@ -35,6 +35,8 @@ class Venda:
     forma_pagamento: str
     status: str = "finalizada"
     cliente_id: Optional[int] = None
+    vendedor_id: Optional[int] = None
+    vendedor_nome: Optional[str] = None
     data_finalizacao: Optional[datetime] = None
 
     def __post_init__(self):
@@ -77,6 +79,8 @@ class Venda:
             "desconto": self.desconto,
             "forma_pagamento":self.forma_pagamento,
             "status": self.status,
+            "vendedor_id": self.vendedor_id,
+            "vendedor_nome": self.vendedor_nome,
             "data_finalizacao": self.data_finalizacao.isoformat(),
         }
 

@@ -1,16 +1,21 @@
 from typing import List
 from src.utils.logKit.config_logging import get_logger
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 from src.controllers.cliente_controller import ClienteController
 from src.api.schemas import ClienteCreate, ClienteUpdate, ClienteResponse
-
+from src.api.middleware import get_current_user, require_admin_or_gerente
 
 cliente_router = APIRouter(prefix="/clients", tags=["clients"])
-endpoint_cliente_log = get_logger("endpoints_produto", "ERROR")
+endpoint_cliente_log = get_logger("LoggerCliente", "WARNING")
 
 
-@cliente_router.post("/register", status_code=status.HTTP_201_CREATED)
-async def cliente_register(cliente: ClienteCreate):
+def get_cliente_controller() -> ClienteController:
+    return ClienteController()
+
+
+@cliente_router.post("/register", status_code=status.HTTP_201_CREATED,
+                     dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
+async def cliente_register(cliente: ClienteCreate, controller: ClienteController = Depends(get_cliente_controller)):
     """
     Cadastra novo cliente no sistema
 
@@ -20,7 +25,6 @@ async def cliente_register(cliente: ClienteCreate):
     - CPF não duplicado
     """
     try:
-        controller = ClienteController()
         resultado = controller.cadastrar_cliente(**cliente.model_dump())
 
         if "sucesso" in resultado:
@@ -40,8 +44,10 @@ async def cliente_register(cliente: ClienteCreate):
         raise HTTPException(status_code=500, detail="Erro interno ao cadastrar cliente")
 
 
-@cliente_router.get("/search")
-async def cliente_search(cpf: str = Query(..., min_length=11, max_length=14, description="CPF do cliente")):
+@cliente_router.get("/search", dependencies=[Depends(get_current_user)])
+async def cliente_search(cpf: str = Query(..., min_length=11, max_length=14, description="CPF do cliente"),
+                         controller: ClienteController = Depends(get_cliente_controller)
+                         ):
     """
     Buscar cliente por CPF
 
@@ -51,7 +57,6 @@ async def cliente_search(cpf: str = Query(..., min_length=11, max_length=14, des
         404: CLiente não encontrado
     """
     try:
-        controller = ClienteController()
         resultado = controller.buscar_cliente(cpf)
         if not resultado:
             raise HTTPException(status_code=404, detail="Cliente não encontrado")
@@ -63,8 +68,9 @@ async def cliente_search(cpf: str = Query(..., min_length=11, max_length=14, des
         raise HTTPException(status_code=500, detail="Erro interno ao buscar cliente")
 
 
-@cliente_router.put("/edit_registration")
-async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate):
+@cliente_router.put("/edit_registration", dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
+async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate,
+                                    controller: ClienteController = Depends(get_cliente_controller)):
     """
     Edita dados de contato do cliente
 
@@ -75,8 +81,6 @@ async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate):
     Nota: Apenas os campos fornecidos serão atualizados
     """
     try:
-
-        controller = ClienteController()
         dados_atualizacao = cliente_update.model_dump(exclude_unset=True)
 
         if not dados_atualizacao:
@@ -101,9 +105,8 @@ async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate):
         raise HTTPException(status_code=500, detail="Erro interno ao editar cliente")
 
 
-
-@cliente_router.delete("/disable")
-async def cliente_disabled(cpf: str):
+@cliente_router.delete("/disable", dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
+async def cliente_disabled(cpf: str, controller: ClienteController = Depends(get_cliente_controller)):
     """
     Desativa cliente (soft delete)
 
@@ -111,7 +114,6 @@ async def cliente_disabled(cpf: str):
     Cliente inativos não aparecem em listagem e não podem fazer compras
     """
     try:
-        controller = ClienteController()
         resultado = controller.desativar_cliente(cpf)
 
         if "desativado" in resultado or "sucesso" in resultado:
@@ -127,10 +129,13 @@ async def cliente_disabled(cpf: str):
         endpoint_cliente_log.exception(f"Erro desativar cliente")
         raise HTTPException(status_code=500, detail="Erro interno ao desativar cliente")
 
-@cliente_router.get("", response_model=List[ClienteResponse])
+
+@cliente_router.get("", response_model=List[ClienteResponse],
+                    dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
 async def list_clients(
-    skip: int = Query(0, ge=0, description="Numero de registros a pular"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximo de registros")
+        skip: int = Query(0, ge=0, description="Numero de registros a pular"),
+        limit: int = Query(100, ge=1, le=1000, description="Maximo de registros"),
+        controller: ClienteController = Depends(get_cliente_controller)
 ):
     """
     Lista todos os clientes ativos
@@ -142,8 +147,7 @@ async def list_clients(
     """
 
     try:
-        clientes = ClienteController()
-        resultado = clientes.listar_clientes()
+        resultado = controller.listar_clientes()
 
         if isinstance(resultado, str):
             return []
@@ -153,4 +157,3 @@ async def list_clients(
     except Exception as e:
         endpoint_cliente_log.exception("Erro ao listar clientes")
         raise HTTPException(status_code=500, detail="Erro interno ao listar_clientes")
-

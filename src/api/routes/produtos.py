@@ -1,16 +1,23 @@
 from typing import Optional
-from fastapi import APIRouter, status, HTTPException, Query
+from fastapi import APIRouter, status, HTTPException, Query, Depends
 from src.api.schemas.produto_schema import ProdutoUpdate
 from src.controllers import ProdutoController
 from src.utils.logKit import get_logger
 from src.api.schemas import ProdutoCreated
+from src.api.middleware import get_current_user, require_admin_or_gerente, require_vendedor_or_above
 
 produtos_router = APIRouter(prefix="/products", tags=["products"])
-endpoint_produtos_log = get_logger("produtos", "ERROR")
+endpoint_produtos_log = get_logger("LoggerProduto", "WARNING")
 
 
-@produtos_router.post("/", status_code=status.HTTP_201_CREATED)
-async def cadastrar_produto(produto: ProdutoCreated):
+def get_produto_controller() -> ProdutoController:
+    """Dependency para obter instância do EstoqueController"""
+    return ProdutoController()
+
+
+@produtos_router.post("/", status_code=status.HTTP_201_CREATED,
+                      dependencies=[Depends(require_admin_or_gerente), Depends(get_current_user)])
+async def cadastrar_produto(produto: ProdutoCreated, controller: ProdutoController = Depends(get_produto_controller)):
     """
     Cadastra um novo produto no sistema
 
@@ -21,7 +28,6 @@ async def cadastrar_produto(produto: ProdutoCreated):
 
     """
     try:
-        controller = ProdutoController()
         resultado = controller.cadastrar_produto(**produto.model_dump())
 
         if "sucesso" in resultado:
@@ -36,8 +42,10 @@ async def cadastrar_produto(produto: ProdutoCreated):
         raise HTTPException(status_code=500, detail=f"Erro interno ao cadastrar produto: {str(e)}")
 
 
-@produtos_router.patch("/{id_produto}", status_code=status.HTTP_200_OK)
-async def atualizar_produto(id_produto: int, produto: ProdutoUpdate):
+@produtos_router.patch("/{id_produto}", status_code=status.HTTP_200_OK,
+                       dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
+async def atualizar_produto(id_produto: int, produto: ProdutoUpdate,
+                            controller: ProdutoController = Depends(get_produto_controller)):
     """
     Editar dados de um produto no sistema
 
@@ -51,7 +59,6 @@ async def atualizar_produto(id_produto: int, produto: ProdutoUpdate):
     """
 
     try:
-        controller = ProdutoController()
         dados_atualizados = produto.model_dump(exclude_unset=True, exclude_none=True)
 
         if not dados_atualizados:
@@ -74,12 +81,13 @@ async def atualizar_produto(id_produto: int, produto: ProdutoUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@produtos_router.get("/search", status_code=status.HTTP_200_OK)
+@produtos_router.get("/search", status_code=status.HTTP_200_OK,
+                     dependencies=[Depends(get_current_user), Depends(require_vendedor_or_above)])
 async def buscar_produto(nome: Optional[str] = Query(None, description="Buscar por nome"),
-                         categoria:Optional[str] = Query(None, description="Buscar por categoria"),
-                         modelo: Optional[str] = Query(None, description="Buscar por modelo")
+                         categoria: Optional[str] = Query(None, description="Buscar por categoria"),
+                         modelo: Optional[str] = Query(None, description="Buscar por modelo"),
+                         controller: ProdutoController = Depends(get_produto_controller)
                          ):
-
     """
     Buscar produto por coluna e dado
 
@@ -90,7 +98,6 @@ async def buscar_produto(nome: Optional[str] = Query(None, description="Buscar p
         404 produto não encontrado
     """
     try:
-        controller = ProdutoController()
 
         if nome:
             resultado = controller.busca_produto('nome', nome)
@@ -113,8 +120,9 @@ async def buscar_produto(nome: Optional[str] = Query(None, description="Buscar p
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@produtos_router.delete("/{id_produto}")
-async def desabilitar_produto(id_produto: int):
+@produtos_router.delete("/{id_produto}", status_code=status.HTTP_202_ACCEPTED,
+                        dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
+async def desabilitar_produto(id_produto: int, controller: ProdutoController = Depends(get_produto_controller)):
     """
     Desabilitar produto (soft delete)
 
@@ -122,7 +130,6 @@ async def desabilitar_produto(id_produto: int):
     Produtos inativos não aparecem em buscas.
     """
     try:
-        controller = ProdutoController()
         resultado = controller.desabilitar_produto(id_produto)
 
         if "sucesso" in resultado:

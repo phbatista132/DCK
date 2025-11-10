@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from decimal import Decimal, ROUND_DOWN
+from typing import Dict, List, Optional
 from src.models.vendas import Venda, ItemVenda
 from src.controllers import EstoqueController, ClienteController
 from src.utils.file_helpers import gerar_arquivo, verificar_arquivo_vazio
@@ -10,13 +10,20 @@ from src.config import PRODUTOS_DATA, VENDAS_DIR, ITENS_VENDAS_DIR
 
 class VendaController:
     def __init__(self):
-        self.carrinho = []
+        self.carrinhos: Dict[int, List[dict]] = {}
         self.vendas_log = get_logger("LoggerVendasController", "DEBUG")
         self.estoque = EstoqueController()
         self.cliente = ClienteController()
         self.estoque_data = PRODUTOS_DATA
         self.vendas_data = VENDAS_DIR
         self.itens_venda_data = ITENS_VENDAS_DIR
+
+    def _get_carrinho(self, user_id: int):
+        """Carrinho do usuario especifico"""
+
+        if user_id not in self.carrinhos:
+            self.carrinhos[user_id] = []
+        return self.carrinhos[user_id]
 
     def venda_id(self) -> int:
         """Gera ID único para venda"""
@@ -33,7 +40,16 @@ class VendaController:
 
         return id_venda
 
-    def adicionar_item(self, produto_id: int, quantidade: int):
+    def adicionar_item(self, produto_id: int, quantidade: int, user_id: int):
+        """
+        Adiciona item ao carrinho do usuário específico
+
+        Args:
+            produto_id: ID do produto
+            quantidade: Quantidade desejada
+            user_id: ID do usuário autenticado
+
+        """
         try:
             self.vendas_log.debug(f"Adicionando item {produto_id} - {quantidade}")
             df = pd.read_csv(self.estoque_data, encoding="utf-8", sep=",")
@@ -55,55 +71,63 @@ class VendaController:
                 self.vendas_log.warning(f"Quantidade: {quantidade} indisponivel")
                 return "Quantidade indisponivel"
 
-            item = {
-                "produto_id": produto_id,
-                "nome": nome_produto,
-                "quantidade": quantidade,
-                "preco_unitario": preco_unitario,
-                "subtotal": preco_unitario * quantidade
+            carrinho = self._get_carrinho(user_id)
 
-            }
-            self.carrinho.append(item)
-            self.vendas_log.debug(f"Item adicionado ao carrinho: {item}")
+            item_existente = next((i for i in carrinho if i['produto_id'] == produto_id), None)
+
+            if item_existente:
+                item_existente['quantidade'] += quantidade
+                item_existente['subtotal'] = item_existente['preco_unitario'] * item_existente['quantidade']
+                self.vendas_log.info(f"Quantidade atualizada no carrinho do user {user_id}")
+            else:
+                item = {
+                    "produto_id": produto_id,
+                    "nome": nome_produto,
+                    "quantidade": quantidade,
+                    "preco_unitario": preco_unitario,
+                    "subtotal": preco_unitario * quantidade
+
+                }
+                carrinho.append(item)
+                self.vendas_log.debug(f"Item adicionado ao carrinho: {item}")
 
             return "Item adicionado ao carrinho"
         except Exception as e:
             self.vendas_log.exception(f"Erro ao adicionar produto {produto_id}")
             return f"Erro: {e}"
 
-    def ver_carinho(self):
+    def ver_carinho(self, user_id: int):
         """Retorna carrinho atual"""
-        return self.carrinho
+        self._get_carrinho(user_id)
 
-    def remover_item(self, produto_id: int):
-        """Remove item do carrinho"""
+    def remover_item(self, produto_id: int, user_id: int):
+        """Remove item do carrinho do usuário"""
         try:
-            self.vendas_log.debug(f"Removendo item: {produto_id} do carrinho")
+            carrinho = self._get_carrinho(user_id)
 
-            item = next((i for i in self.carrinho if i['produto_id'] == produto_id), None)
+            item = next((i for i in carrinho if i['produto_id'] == produto_id), None)
             if not item:
-                self.vendas_log.warning(f"Produto: {produto_id} não está no carrinho")
+                self.vendas_log.warning(f"Produto: {produto_id} não está no carrinho do user {user_id}")
                 return f"Item não encotrado no carrinho"
 
             self.estoque.liberar_reserva(item['produto_id'], item['quantidade'])
+            carrinho.remove(item)
 
-            self.carrinho.remove(item)
-
-            self.vendas_log.info(f"Item removido do carrinho: {item['nome']} - Reserva liberada")
+            self.vendas_log.info(f"Item removido do carrinho do user {user_id}: {item['nome']}")
             return "Item removido do carrinho"
+
         except Exception as e:
             self.vendas_log.exception(f"Erro ao remover item {produto_id}")
             return f"Erro: {e}"
 
-    def alterar_quantidade(self, produto_id: int, nova_quantidade: int):
-        """Altera quantidade de um item no carrinho"""
+    def alterar_quantidade(self, produto_id: int, nova_quantidade: int, user_id: int):
+        """Altera quantidade no carrinho do usuário"""
         try:
-            self.vendas_log.debug(f"Alterando quantidade do item: {produto_id}")
-
             if nova_quantidade <= 0:
                 return "Quantidade deve ser maior que zero"
 
-            item = next((i for i in self.carrinho if i['produto_id'] == produto_id), None)
+            carrinho = self._get_carrinho(user_id)
+            item = next((i for i in carrinho if i['produto_id'] == produto_id), None)
 
             if not item:
                 self.vendas_log.warning(f"Produto {produto_id} não esta no carrinho")
@@ -123,20 +147,19 @@ class VendaController:
             item['quantidade'] = nova_quantidade
             item['subtotal'] = item['preco_unitario'] * nova_quantidade
 
-            self.vendas_log.info(f"Quantidade alterada: {quantidade_atual} → {nova_quantidade}")
+            self.vendas_log.info(f"user {user_id} Quantidade alterada: {quantidade_atual} → {nova_quantidade}")
             return "Quantidade alterada com sucesso"
 
         except Exception as e:
             self.vendas_log.exception(f"Erro ao alterar quantidade")
             return f"Erro: {e}"
 
-    def _calcular_subtotal(self) -> float:
+    def _calcular_subtotal(self, carrinho: List[dict]) -> float:
         """Calcular subtotal do carrinho"""
-        return sum(item["subtotal"] for item in self.carrinho)
+        return sum(item["subtotal"] for item in carrinho)
 
-
-
-    def finalizar_venda(self, cpf_cliente: str = None, forma_pagamento: str = "Debito", percentual_desconto: float = 0):
+    def finalizar_venda(self, cpf_cliente: str = None, forma_pagamento: str = "Debito", percentual_desconto: float = 0,
+                        user_id: Optional[int] = None, username: Optional[str] = None):
         """
                 Finaliza venda criando objeto Venda e persistindo
 
@@ -144,13 +167,20 @@ class VendaController:
             cpf_cliente: CPF do cliente (opcional)
             forma_pagamento: Forma de pagamento
             percentual_desconto: Desconto percentual (0-100)
+            user_id: Id do usuario
+            username: Nome do usuario
         """
         try:
             gerar_arquivo(self.vendas_data)
             gerar_arquivo(self.itens_venda_data)
 
-            if not self.carrinho:
-                self.vendas_log.warning("Carinho de compras vazio")
+            if user_id is None:
+                return "Erro: ID do vendedor não fornecido"
+
+            carrinho = self._get_carrinho(user_id)
+
+            if not carrinho:
+                self.vendas_log.warning(f"Carrinho vazio do user {user_id}")
                 return "Carrrinho vazio"
 
             cliente_id = None
@@ -161,7 +191,7 @@ class VendaController:
                     self.vendas_log.warning(f"Cliente {cpf_cliente} não encontrado")
                     return "Cliente não encontrado"
 
-                if not getattr(cliente,'ativo', False):
+                if not getattr(cliente, 'ativo', False):
                     self.vendas_log.warning(f"Cliente {cpf_cliente} está inativo")
                     return "Cliente inativo, sem possibilidade de vincular compra"
 
@@ -171,12 +201,14 @@ class VendaController:
                 ItemVenda(produto_id=item['produto_id'], nome_produto=item['nome'],
                           quantidade=item['quantidade'], preco_unitario=item['preco_unitario'],
                           subtotal=item['subtotal'])
-                for item in self.carrinho
+                for item in carrinho
             ]
 
             venda = Venda(
-                id_venda=self.venda_id(), data_hora=datetime.now(), itens=itens_venda, subtotal=self._calcular_subtotal(),
-                desconto=0.0, total=0.0, forma_pagamento=forma_pagamento, cliente_id=cliente_id
+                id_venda=self.venda_id(), data_hora=datetime.now(), itens=itens_venda,
+                subtotal=self._calcular_subtotal(carrinho),
+                desconto=0.0, total=0.0, forma_pagamento=forma_pagamento, cliente_id=cliente_id,
+                vendedor_id=user_id,vendedor_nome=username
             )
 
             if percentual_desconto > 0:
@@ -187,20 +219,18 @@ class VendaController:
                     self.vendas_log.exception("Erro ao aplicar desconto")
                     return f"Erro no desconto: {e}"
 
-
-
             df_venda = pd.DataFrame([venda.to_dict()])
             arquivo_vazio = verificar_arquivo_vazio(self.vendas_data)
             df_venda.to_csv(self.vendas_data, mode='a', header=arquivo_vazio, index=False, sep=',')
 
-            for item in self.carrinho:
+            for item in carrinho:
                 self.estoque.saida_estoque(item['produto_id'], item['quantidade'])
 
-            self.carrinho.clear()
+            carrinho.clear()
 
-            self.vendas_log.info(f"Venda {venda.id_venda} finalizada | Total: {venda.total}")
-
+            self.vendas_log.info(f"Venda {venda.id_venda} finalizada por {username} (ID: {user_id}) ")
             return f"Compra finalizada! ID: {venda.id_venda} | Total: R$ {venda.total:.2f}"
+
         except ValueError as ve:
             self.vendas_log.error(f"Erro de validação: {ve}")
             return f"Erro de validação: {ve}"
@@ -208,17 +238,18 @@ class VendaController:
             self.vendas_log.exception(f"Erro ao finalizar venda: {e}")
             return f"Erro: {e}"
 
-    def cancelar_venda(self) -> str:
+    def cancelar_venda(self, user_id) -> str:
         """Cancela venda atual e libera todas as reservas"""
         try:
-            if not self.carrinho:
+            carrinho = self._get_carrinho(user_id)
+            if not carrinho:
                 return "Carrrinho se encontra vazio"
 
-            for item in self.carrinho:
+            for item in carrinho:
                 self.estoque.liberar_reserva(item['produto_id'], item['quantidade'])
 
-            self.carrinho.clear()
-            self.vendas_log.info("Venda cancelada - Todas as reservas foram liberadas")
+            carrinho.clear()
+            self.vendas_log.info(f"Venda cancelada pelo user {user_id} - Reservas liberadas")
 
             return "Venda cancelada com sucesso"
 

@@ -51,18 +51,23 @@ class EstoqueController:
             idx = df[df['codigo'] == id_item].index[0]
             nome_produto = df.loc[idx, 'nome']
             qtd_anterior = df.loc[idx, 'quantidade_estoque']
+            produto_ativo = df.loc[idx, 'ativo']
+
+            if not produto_ativo:
+                self.estoque_log.warning(f"Produto: {id_item} se encontra desativado")
+                return "Sem possibilidade de repor produto desativados"
 
             df.loc[idx, 'quantidade_estoque'] += qtd
             self._salvar_estoque(df)
             self.estoque_log.info(f"Produto {nome_produto}: {qtd_anterior} -> {qtd_anterior + qtd} unidades")
 
-            return f"Item reposto"
+            return f"Item reposto com sucesso"
 
         except Exception as e:
             self.estoque_log.exception("Erro ao repor estoque")
             return f'Erro interno ao repor estoque'
 
-    def produto_habilitado(self, id_produto: int) -> tuple[bool, str]:
+    def  produto_habilitado(self, id_produto: int) -> tuple[bool, str]:
         """Verifica se produto esta habilitado"""
         try:
 
