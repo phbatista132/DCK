@@ -1,33 +1,99 @@
-import pandas as pd
-from src.utils import SistemaAdm, Produto
-from logging import log
+from typing import Optional, List
+from datetime import datetime
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_DOWN
 
 
-class Vendas:
-    def __init__(self):
-        self.cliente = SistemaAdm
-        self.obter_estoque = Produto.estoque
+@dataclass
+class ItemVenda:
+    produto_id: int
+    nome_produto: str
+    quantidade: int
+    preco_unitario: float
+    subtotal: float
 
-    def venda(self, codigo, quantidade):
-        df = self.obter_estoque()
-        if codigo not in df['codigo'].values:
-            print('Codigo não localizado')
-            return
+    def __post_init__(self):
+        if self.quantidade <= 0:
+            raise ValueError("Quantidade deve ser positiva")
+        if self.preco_unitario < 0:
+            raise ValueError("Preço unitário não pode ser negativo")
 
-        if quantidade <= 0:
-            print("Quantidade menor que 0, impossivel seguir com a compra")
-            return
-
-        estoque_atual = df.loc[df['codigo'] == codigo, 'quantidade'].values[0]
-        if quantidade > estoque_atual:
-            print(f'Estoque insuficiente! Estoque: {estoque_atual}')
-            return
+        self.subtotal = float(
+            Decimal(str(self.quantidade * self.preco_unitario)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+        )
 
 
-        df.loc[df['codigo'] == codigo, 'quantidade'] -= quantidade
+@dataclass
+class Venda:
 
-        #Verificar chamada do init self.obter_estoque, retorna erro de method ou function
-        df.to_csv(self.obter_estoque(), index=False, encoding='utf-8')
+    id_venda: int
+    data_hora: datetime
+    itens: List[ItemVenda]
+    subtotal: float
+    total: float
+    desconto: float
+    forma_pagamento: str
+    status: str = "finalizada"
+    cliente_id: Optional[int] = None
+    vendedor_id: Optional[int] = None
+    vendedor_nome: Optional[str] = None
+    data_finalizacao: Optional[datetime] = None
 
-        print(f"✅ Compra do item finalizada com sucesso.")
+    def __post_init__(self):
+        if not self.itens:
+            raise ValueError("Venda deve ter pelo menos um item")
 
+        self.subtotal = float(Decimal(str(self._calcular_subtotal())).quantize(Decimal('0.01'), rounding=ROUND_DOWN))
+        self.total = self.subtotal
+
+        if self.data_finalizacao is None:
+            self.data_finalizacao = datetime.now()
+
+    def _calcular_subtotal(self) -> float:
+        return  sum(item.subtotal for item in self.itens)
+
+    def aplicar_desconto(self, percentual: float) -> float:
+        if not (0 <= percentual <= 100):
+            raise ValueError("Desconto deve estar entre 0 e 100")
+
+        valor_desconto = self.subtotal * (percentual / 100)
+        self.desconto = float(Decimal(str(valor_desconto)).quantize(Decimal("0.00"), rounding=ROUND_DOWN))
+
+        self.total = self.subtotal - self.desconto
+
+        return self.desconto
+
+
+    def tem_cliente(self):
+        return  self.cliente_id is not None
+
+    def to_dict(self) -> dict:
+
+        return {
+            "id_venda": self.id_venda,
+            "data": self.data_hora.isoformat(),
+            "cliente_id": self.cliente_id,
+            "itens": self.itens,
+            "subtotal": self.subtotal,
+            "total": self.total,
+            "desconto": self.desconto,
+            "forma_pagamento":self.forma_pagamento,
+            "status": self.status,
+            "vendedor_id": self.vendedor_id,
+            "vendedor_nome": self.vendedor_nome,
+            "data_finalizacao": self.data_finalizacao.isoformat(),
+        }
+
+    def itens_to_list(self)-> List[dict]:
+        return [
+            {
+                'id_item': f"{self.id_venda}_{idx}",
+                'id_venda': self.id_venda,
+                'produto_id': item.produto_id,
+                'nome_produto': item.nome_produto,
+                'quantidade': item.quantidade,
+                'preco_unitario': item.preco_unitario,
+                'subtotal': item.subtotal
+            }
+            for idx, item in enumerate(self.itens, start=1)
+        ]

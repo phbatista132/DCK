@@ -15,5 +15,5 @@ class MaxLevelFilter(logging.Filter):
         # record.levelno é o número do level do log
         # se o número do level do log for menor ou igual ao max_level que
         # definimos no filter o log passa.
-        # INFO 20 só aceitará logs INFO e DEBUG.
+        # INFO 20 só aceitará loggers INFO e DEBUG.
         return record.levelno <= self.max_level

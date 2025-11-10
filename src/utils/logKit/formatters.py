@@ -66,6 +66,8 @@ class JSONLogFormatter(logging.Formatter):
                 continue
 
             if key not in self.include_keys:
+                if key == 'asctime':
+                    continue
                 # gera erro caso a chave não esteja sendo do include_keys
                 msg = f"Key {key!r} does not exist in 'include_keys'"
                 raise ValueError(msg)

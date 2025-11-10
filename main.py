@@ -1,56 +1,85 @@
 from src.controllers.produto_controller import ProdutoController
+from src.controllers.venda_controller import VendaController
+from src.controllers.cliente_controller import ClienteController
 from src.controllers.estoque_controller import EstoqueController
-from utils import logger
-import logging
+
 
 
 def main():
-    sisproduto = ProdutoController()
     sisestoque = EstoqueController()
+    sisproduto = ProdutoController()
+    sisvendas = VendaController()
+    siscliente = ClienteController()
     while True:
         try:
-            opc = int(input('Opção: '))
+            opc = int(input("OPÇÃO: "))
             if opc == 1:
-                nome = str(input('Nome: '))
-                modelo = str(input('Modelo: '))
-                categoria = str(input('categoria: '))
-                valor = float(input("Valor: ").replace(',', '.'))
-                quantidade = int(input('Quantidade: '))
-                vl_compra = float(input('Valor compra: ').replace(',', '.'))
-                print(sisproduto.cadastrar_produto(nome, modelo, categoria, valor , quantidade, vl_compra))
+                produto = int(input("Produto: "))
+                quantidade = int(input("Quantidade: "))
+                print(sisvendas.adicionar_item(produto, quantidade))
             elif opc == 2:
-                id_produto = int(input('ID: '))
-                coluna = str(input('Coluna: '))
-                dado = input('dado para alteração: ')
-                sisproduto.editar_produto(id_produto, coluna, dado)
-
+                produto = int(input("Produto: "))
+                nova_quantidade = int(input("Quantidade: "))
+                print(sisvendas.alterar_quantidade(produto, nova_quantidade))
             elif opc == 3:
-                coluna =  str(input('Filtra por: '))
-                dado_busca = input('Produto: ')
-                print(sisproduto.busca_produto(coluna, dado_busca))
+                produto = int(input("Produto: "))
+                print(sisvendas.remover_item(produto))
             elif opc == 4:
-                produto = int(input('ID Produto: '))
-                quantidade = int(input('Quantidade para venda: '))
-                print(sisestoque.disponibilidade(produto, quantidade))
-
+                print(sisvendas.ver_carinho())
             elif opc == 5:
-                print(sisproduto.total_produtos())
+                cliente = input("CPF: ")
+                forma_pagamento = input('Forma de pagamento: ')
+                desconto = float(input("Desconto: "))
+                print(sisvendas.finalizar_venda(cliente ,forma_pagamento=forma_pagamento, percentual_desconto=desconto))
+            elif opc == 6:
+                print(sisvendas.cancelar_venda())
+            elif opc == 7:
+                nome = input("Nome: ")
+                modelo = input("Modelo: ")
+                categoria = input("Categoria: ")
+                valor = float(input("Valor: "))
+                quantidade_estoque = int(input("Quantidade de estoque: "))
+                vlr_compra = float(input("Valor Compra: "))
+                print(sisproduto.cadastrar_produto(nome, modelo, categoria, valor, quantidade_estoque, vlr_compra))
+            elif opc == 8:
+                id_produto = int(input("ID Produto: "))
+                valor = float(input("Valor: "))
+                print(sisproduto.editar_produto(id_produto, valor=valor))
+            elif opc == 9:
+                coluna = input("Coluna: ")
+                dado = input("Dado: ")
+                print(sisproduto.busca_produto(coluna, dado))
+            elif opc == 10:
+                cpf = input("CPF: ")
+                print(siscliente.buscar_cliente(cpf))
+            elif opc ==11:
+                nome = input("Nome: ")
+                cpf = str(input("CPF: "))
+                dt_nascimento = input("Data de nascimento: ")
+                telefone = input("Telefone: ")
+                endereco = input("Endereco: ")
+                print(siscliente.cadastrar_cliente(nome,dt_nascimento, cpf, telefone, endereco))
+            elif opc == 12:
+                cpf = input("CPF: ")
+                print(siscliente.desativar_cliente(cpf))
+            elif opc == 13:
+                cpf = input("CPF: ")
+                print(siscliente.editar_cadastro(cpf, nome="Pablo Henrique"))
+            elif opc == 14:
+                print(siscliente.listar_clientes())
+            elif opc == 15:
+                id_produto = int(input("ID Produto: "))
+                quantidade = int(input("Quantidade: "))
+                print(sisestoque.repor_estoque(id_produto, quantidade))
             elif opc == 0:
-                print('Saindo do programa!')
+                print("Programa finalizado")
                 break
-            else:
-                print('Opção não localizada')
+
+
 
         except Exception as e:
             print(f"Erro:  {e}")
 
 
-
-if __name__ == '__main__':
-    logger.setup()
-    logger = logging.getLogger("produto_log")
-    logger.debug("msg")
-    logger.info("msg")
-    logger.warning("msg")
-    logger.error("msg")
-    logger.critical("msg")
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,47 @@
+# Ambiente virtual
+venv/
+.env
+*.env
+
+# Arquivos de configuração e credenciais
+*.sqlite3
+*.db
+__pycache__/
+*.py[cod]
+*.log
+
+# Diretórios de IDEs
+.vscode/
+.idea/
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Compilados e caches
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.pyd
+
+# Testes e relatórios
+htmlcov/
+.coverage
+.tox/
+.pytest_cache/
+
+# Arquivos temporários
+*.bak
+*.swp
+*.tmp
+
+# Arquivos de exportação
+*.csv
+*.xlsx
+*.pdf
+*.docx
+
+# Benchmarks
+.benchmarks/
