@@ -402,7 +402,7 @@ class TestVendaModel:
 
         assert isinstance(dict_venda, dict)
         assert dict_venda['id_venda'] == 1
-        assert dict_venda['data'] == "2025-01-15T14:30:00"
+        assert dict_venda['database'] == "2025-01-15T14:30:00"
         assert dict_venda['cliente_id'] == 5
         assert dict_venda['subtotal'] == 3300.0
         assert dict_venda['desconto'] == 100.32

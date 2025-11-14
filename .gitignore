@@ -1,7 +1,10 @@
 # Ambiente virtual
 venv/
 .env
+*.env.example
 *.env
+
+
 
 # Arquivos de configuração e credenciais
 *.sqlite3

@@ -71,7 +71,7 @@ class Venda:
 
         return {
             "id_venda": self.id_venda,
-            "data": self.data_hora.isoformat(),
+            "database": self.data_hora.isoformat(),
             "cliente_id": self.cliente_id,
             "itens": self.itens,
             "subtotal": self.subtotal,

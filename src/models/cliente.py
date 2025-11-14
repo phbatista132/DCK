@@ -6,7 +6,6 @@ from typing import Optional
 @dataclass
 class Cliente:
     """Representa um cliente do sistema"""
-    id_cliente: int
     nome: str
     cpf: str
     dt_nascimento: date
@@ -48,7 +47,6 @@ class Cliente:
     def to_dict(self) -> dict:
         """Converte para dicionario"""
         return {
-            'id_cliente': self.id_cliente,
             'nome': self.nome,
             'cpf': self.cpf,
             'dt_nascimento': self.dt_nascimento.strftime("%d/%m/%Y") if isinstance(self.dt_nascimento, date) else self.dt_nascimento,
@@ -62,7 +60,6 @@ class Cliente:
     def from_dict(data: dict) -> 'Cliente':
         """Cria cliente a partir de um dicionario"""
         return Cliente(
-            id_cliente=data['id_cliente'],
             nome=data['nome'],
             cpf=data['cpf'],
             dt_nascimento= datetime.strptime(data['dt_nascimento'], "%d/%m/%Y").date() if isinstance(data['dt_nascimento'], str) else data['dt_nascimento'],

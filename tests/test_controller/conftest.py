@@ -43,7 +43,7 @@ def temp_vendas_file():
     fd, path = tempfile.mkstemp(suffix='.csv')
 
     with os.fdopen(fd, 'w') as f:
-        f.write("id_venda,data,cliente_id,itens,subtotal,total,desconto,forma_pagamento,status,data_finalizacao\n")
+        f.write("id_venda,database,cliente_id,itens,subtotal,total,desconto,forma_pagamento,status,data_finalizacao\n")
 
     yield path
 

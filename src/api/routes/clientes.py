@@ -30,7 +30,7 @@ async def cliente_register(cliente: ClienteCreate, controller: ClienteController
         if "sucesso" in resultado:
             return {
                 "message": resultado,
-                "data": {
+                "database": {
                     "nome": cliente.nome
                 }
             }

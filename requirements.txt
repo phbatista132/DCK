@@ -18,9 +18,19 @@ pytest-flask==1.3.0
 # Deploy
 gunicorn==21.2.0
 python-dotenv==1.0.0
-```
 
----
+# Banco de dados
+sqlalchemy==2.0.23
+alembic==1.13.1
+
+# Drivers de banco
+psycopg2-binary==2.9.9  # PostgreSQL
+pymysql==1.1.0          # MySQL (opcional)
+
+# Async (opcional, para FastAPI async)
+asyncpg==0.29.0         # PostgreSQL async
+databases==0.8.0        # Async database support
+
 
 ## 🚀 **8. Procfile** (Para Railway)
 ```
