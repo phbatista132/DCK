@@ -6,8 +6,11 @@ from src.api.schemas.auth_schema import (
 )
 from src.api.middleware.auth_middleware import get_current_user, require_admin
 from typing import List, Optional
-
 from src.utils.logKit import get_logger
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 auth_router = APIRouter(prefix="/auth", tags=["Autenticação"])
 endpoit_auth_log = get_logger("LoggerAuth", "WARNING")
@@ -16,7 +19,7 @@ def get_auth_controller():
     """Dependency para obter controller"""
     return AuthController()
 
-
+@limiter.limit("3/minute")
 @auth_router.post("/register", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def registrar(
         usuario: UsuarioRegistro,
@@ -60,7 +63,7 @@ async def registrar(
         "user": dados
     }
 
-
+@limiter.limit("5/minute")
 @auth_router.post("/login", response_model=TokenResponse)
 async def login(
         credenciais: UsuarioLogin,
@@ -103,6 +106,7 @@ async def login(
     return TokenResponse(**dados)
 
 
+@limiter.limit("10/minuto")
 @auth_router.post("/refresh", response_model=dict)
 async def renovar_token(
         request: RefreshTokenRequest,

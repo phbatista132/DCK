@@ -4,6 +4,9 @@ Esquemas pydantic para produto
 from pydantic import BaseModel, Field, field_validator, model_validator
 from decimal import Decimal, ROUND_DOWN
 from typing import Optional
+from src.utils.logKit import get_logger
+
+logger = get_logger("LoggerProdutoController", "DEBUG")
 
 @field_validator('vlr_compra', 'valor')
 def validar_casas_decimais(cls, v: Decimal) -> Decimal:
@@ -48,7 +51,7 @@ class ProdutoUpdate(BaseModel):
     """Schema para edição de produtos"""
     nome: Optional[str] = Field(None, min_length=3, description="Nome do produto")
     modelo: Optional[str] = Field(None, min_length=3, description="Modelo do produto")
-    valor: Optional[Decimal] = Field(None, gt=0, description="Valor do produto")
+    valor: Optional[Decimal] = Field(None, gt=0, le=1000000, description="Valor do produto")
     vlr_compra: Optional[Decimal] = Field(None, gt=0, description="Valor de compra")
 
     @field_validator('vlr_compra', 'valor')
@@ -62,6 +65,12 @@ class ProdutoUpdate(BaseModel):
         if self.vlr_compra > self.valor:
             raise ValueError("O valor de venda não pode ser menor que o valor de compra")
         return self
+
+    @field_validator('valor')
+    def validar_valor_razoavel(cls, v):
+        if v and v > 100000:  # Alerta para valores muito altos
+            logger.warning(f"Valor alto detectado: {v}")
+        return v
 
     class Config:
         json_schema_extra = {

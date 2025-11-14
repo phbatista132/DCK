@@ -29,7 +29,7 @@ class EstoqueReposicaoResponse(BaseModel):
             "example": {
                 "success": True,
                 "message": "Item reposto com sucesso",
-                "data": {
+                "database": {
                     "id_produto": 1,
                     "quantidade_adicionada": 100
                 }

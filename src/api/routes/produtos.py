@@ -109,9 +109,9 @@ async def buscar_produto(nome: Optional[str] = Query(None, description="Buscar p
             raise HTTPException(status_code=400, detail="Forneça ao menos um filtro:  nome, categoria ou modelo")
 
         if "não localizado" in resultado:
-            return {"data": [], "message": "Nenhum produto encontrado"}
+            return {"database": [], "message": "Nenhum produto encontrado"}
 
-        return {'data': resultado}
+        return {'database': resultado}
 
     except HTTPException:
         raise

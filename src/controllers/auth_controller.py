@@ -1,87 +1,57 @@
-import json
-from datetime import datetime
 from typing import Optional, Tuple
-from src.models.usuario import Usuario
-from src.services.security import JWTHandler, PasswordHandler
-from src.utils import gerar_arquivo, verificar_arquivo_vazio, validar_email
-from src.utils.logKit import get_logger
-from src.config import USUARIOS_DIR
+from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+
+from src.database.models import Usuarios
+from src.services.security.password_handler import PasswordHandler
+from src.services.security.jwt_handler import JWTHandler
+
+from src.utils.validators import validar_cpf
+from src.utils.logKit.config_logging import get_logger
+
 
 
 class AuthController:
-    """Controller para autenticação e gerenciamento de usuarios"""
+    """Controller para autenticação e gerenciamento de usuários"""
 
     def __init__(self):
-        self.usuarios_data = USUARIOS_DIR
         self.auth_log = get_logger("LoggerAuthController", "INFO")
         self.password_handler = PasswordHandler()
 
-    def _gerar_id_usuario(self) -> int:
-        """Gerar ID único para novo usuario"""
-        if verificar_arquivo_vazio(self.usuarios_data):
-            return 1
-
-        try:
-            with open(self.usuarios_data, "r", encoding='utf-8') as f:
-                last_line = None
-                for line in f:
-                    if line.strip():
-                        last_line = line
-
-                if last_line:
-                    ultimo_user = json.loads(last_line)
-                    return ultimo_user.get('id_usuario', 0) + 1
-
-                return 1
-
-        except (json.JSONDecodeError, ValueError):
-            return 1
-
-    def _usuario_existe(self, username: str = None, email: str = None) -> bool:
-        """Verifica se um usuario já existe por username ou email"""
-
-        if verificar_arquivo_vazio(self.usuarios_data):
-            return False
-
-        try:
-            with open(self.usuarios_data, "r", encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        usuario = json.loads(line)
-                        if username and usuario.get('username') == username:
-                            return True
-                        if email and usuario.get('email') == email:
-                            return True
-
-                return False
-        except Exception as e:
-            self.auth_log.exception("Erro ao verificar existencia de usuario")
-            return False
-
-    def registrar_usuario(self, username: str, email: str, senha: str, nome_completo: str, tipo_usuario: str,
-                          ) -> Tuple[bool, str, Optional[str]]:
+    def registrar_usuario(
+            self,
+            db: Session,
+            username: str,
+            email: str,
+            senha: str,
+            nome_completo: str,
+            tipo_usuario: str = "cliente",
+            cpf: Optional[str] = None,
+            telefone: Optional[str] = None
+    ) -> Tuple[bool, str, Optional[dict]]:
         """
-        Registrar usuario
+        Registra novo usuário no sistema
 
         Args:
-            username: Usuario
-            email: Email
-            senha: Senha
+            db: Sessão do banco de dados
+            username: Nome de usuário único
+            email: Email único e válido
+            senha: Senha em texto plano (será hasheada)
             nome_completo: Nome completo
             tipo_usuario: admin, gerente, vendedor, cliente
-
-        Returns:
-            (sucesso: bool, mensagem: str, dados_usuario: str)
+            cpf: CPF (será criptografado)
+            telefone: Telefone (será criptografado)
         """
         try:
-            gerar_arquivo(self.usuarios_data)
-
+            # Validações básicas
             if len(username) < 3:
-                return False, "Username deve ter no minimo 3 caracteres", None
+                return False, "Username deve ter no mínimo 3 caracteres", None
 
-            if not validar_email(email):
-                return False, "Email Invalido", None
+            if '@' not in email or '.' not in email:
+                return False, "Email inválido", None
 
+            # Validar força da senha
             senha_valida, msg_senha = self.password_handler.validar_forca_senha(senha)
             if not senha_valida:
                 return False, msg_senha, None
@@ -89,71 +59,95 @@ class AuthController:
             if tipo_usuario not in ['admin', 'gerente', 'vendedor', 'cliente']:
                 return False, "Tipo de usuário inválido", None
 
-            if self._usuario_existe(username=username):
-                self.auth_log.warning(f"Tentativa de registro com username duplicado: {username}")
-                return False, "Username já esta em uso", None
+            # Validar CPF se fornecido
+            if cpf and not validar_cpf(cpf):
+                return False, "CPF inválido", None
 
-            if self._usuario_existe(email=email):
-                self.auth_log.warning(f"Tentativa de registro com email duplicado: {email}")
-                return False, "Email já está cadastrado", None
-
+            # Hash da senha
             senha_hash = self.password_handler.hash_password(senha)
-            id_usuario = self._gerar_id_usuario()
 
-            usuario = Usuario(
-                id_usuario=id_usuario,
-                username=username,
-                email=email,
+            # Criptografar dados sensíveis
+
+
+            # Criar usuário
+            usuario = Usuarios(
+                username=username.lower(),
+                email=email.lower(),
                 senha_hash=senha_hash,
                 nome_completo=nome_completo,
-                tipo_usuario=tipo_usuario
+                tipo_usuario=tipo_usuario,
+
             )
 
-            with open(self.usuarios_data, "a", encoding='utf-8') as f:
-                f.write(json.dumps(usuario.to_dict(), ensure_ascii=False, default=str))
+            db.add(usuario)
+            db.commit()
+            db.refresh(usuario)
 
-            self.auth_log.info(f"Usuario registrado: {username} (ID: {id_usuario})")
+            self.auth_log.info(
+                f"Usuário registrado: {username} (ID: {usuario.id_usuario}, Tipo: {tipo_usuario})"
+            )
 
-            return True, "Usuario registrado com sucesso", None
+            # Retornar dados seguros
+            usuario_dict = {
+                'id_usuario': usuario.id_usuario,
+                'username': usuario.username,
+                'email': usuario.email,
+                'nome_completo': usuario.nome_completo,
+                'tipo_usuario': usuario.tipo_usuario,
+                'ativo': usuario.ativo,
+                'data_cadastro': usuario.data_cadastro.isoformat()
+            }
+
+            return True, "Usuário registrado com sucesso", usuario_dict
+
+        except IntegrityError as ie:
+            db.rollback()
+            if 'username' in str(ie):
+                self.auth_log.warning(f"Username duplicado: {username}")
+                return False, "Username já está em uso", None
+            elif 'email' in str(ie):
+                self.auth_log.warning(f"Email duplicado: {email}")
+                return False, "Email já está cadastrado", None
+            else:
+                self.auth_log.exception("Erro de integridade ao registrar usuário")
+                return False, "Erro ao registrar usuário", None
 
         except Exception as e:
-            self.auth_log.exception(f"Erro ao registrar usuario: {username}")
-            return False, "Erro interno ao registrar usuario", None
+            db.rollback()
+            self.auth_log.exception(f"Erro ao registrar usuário: {username}")
+            return False, "Erro interno ao registrar usuário", None
 
-    def login(self, username: str, senha: str) -> Tuple[bool, str, Optional[dict]]:
-        """
-        Autentica usuario e gera tokens JWT
-
-        Returns:
-             (sucesso: bool, mensagem: str, tokens: dict)
-             tokens ={
-                "acess_token":"..."
-                "refresh_token":"..."
-                "token_type": "bearer"
-                "user":{...}
-             }
-        """
+    def login(self, db: Session, username: str, senha: str) -> Tuple[bool, str, Optional[dict]]:
+        """Autentica usuário e gera tokens JWT"""
         try:
-            usuario = self._buscar_usuario(username=username)
+            # Buscar usuário
+            usuario = db.query(Usuarios).filter(
+                Usuarios.username == username.lower()
+            ).first()
 
             if not usuario:
                 self.auth_log.warning(f"Tentativa de login com username inexistente: {username}")
-                return False, "Credenciais invalidos", None
+                return False, "Credenciais inválidas", None
 
-            if not usuario.get('ativo'):
-                self.auth_log.warning(f"tentativa de login com ativo: {username}")
-                return False, "Usuario desativado", None
+            # Verificar se está ativo
+            if not usuario.ativo:
+                self.auth_log.warning(f"Tentativa de login de usuário inativo: {username}")
+                return False, "Usuário desativado", None
 
-            if not self.password_handler.verify_password(senha, usuario["senha_hash"]):
-                self.auth_log.warning(f"tentativa de login com senha incorreta: {username}")
-                return False, "Credenciais invalidas", None
+            # Verificar senha
+            if not self.password_handler.verify_password(senha, usuario.senha_hash):
+                self.auth_log.warning(f"Tentativa de login com senha incorreta: {username}")
+                return False, "Credenciais inválidas", None
 
-            self._atualizar_ultimo_acesso(usuario["id_usuario"])
+            # Atualizar último acesso
+            usuario.ultimo_acesso = datetime.utcnow()
+            db.commit()
 
+            # Gerar tokens
             token_data = {
-                "user_id": usuario["id_usuario"],
-                "username": usuario["username"],
-                "tipo_usuario": usuario["tipo_usuario"]
+                "user_id": usuario.id_usuario,
+                "username": usuario.username,
+                "tipo_usuario": usuario.tipo_usuario
             }
 
             access_token = JWTHandler.create_access_token(token_data)
@@ -161,88 +155,55 @@ class AuthController:
 
             self.auth_log.info(f"Login bem-sucedido: {username}")
 
-            usuario_safe = {k: v for k, v in usuario.items() if k not in ['senha_hash']}
-
             return True, "Login realizado com sucesso", {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer",
-                "user": usuario_safe
+                "user": {
+                    'id_usuario': usuario.id_usuario,
+                    'username': usuario.username,
+                    'email': usuario.email,
+                    'nome_completo': usuario.nome_completo,
+                    'tipo_usuario': usuario.tipo_usuario,
+                    'ativo': usuario.ativo
+                }
             }
+
         except Exception as e:
             self.auth_log.exception(f"Erro ao realizar login: {username}")
             return False, "Erro interno ao fazer login", None
 
-    def _buscar_usuario(self, user_id: int = None, username: str = None, email: str = None) -> Optional[dict]:
-        """Buscar usuario por ID, username e email"""
-        if verificar_arquivo_vazio(self.usuarios_data):
+    def buscar_usuario(
+            self,
+            db: Session,
+            user_id: int = None,
+            username: str = None,
+            email: str = None
+    ) -> Optional[Usuarios]:
+        """Busca usuário por ID, username ou email"""
+        try:
+            query = db.query(Usuarios)
+
+            if user_id:
+                return query.filter(Usuarios.id_usuario == user_id).first()
+            elif username:
+                return query.filter(Usuarios.username == username.lower()).first()
+            elif email:
+                return query.filter(Usuarios.email == email.lower()).first()
+
             return None
 
-        try:
-            with open(self.usuarios_data, "r", encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        usuario = json.loads(line)
-                        if user_id and usuario.get('id_usuario') == user_id:
-                            return usuario
-                        if username and usuario.get('username') == username:
-                            return usuario
-                        if email and usuario.get('email') == email:
-                            return usuario
-                return None
         except Exception as e:
-            self.auth_log.exception(f"Erro ao buscar usuario: {username}")
+            self.auth_log.exception("Erro ao buscar usuário")
             return None
 
-
-    def _atualizar_ultimo_acesso(self, user_id: int) -> None:
-        """Atualizar timestamp do ultimo acesso"""
-        try:
-            with open(self.usuarios_data, "r", encoding='utf-8') as f:
-                usuarios = [json.loads(line) for line in f if line.strip()]
-
-            for usuario in usuarios:
-                if usuario['id_usuario'] == user_id:
-                    usuario['ultimo_acesso'] = datetime.now().isoformat()
-                    break
-            with open(self.usuarios_data, "w", encoding='utf-8') as f:
-                for usuario in usuarios:
-                    f.write(json.dumps(usuario, ensure_ascii=False, default=str) + '\n')
-
-        except Exception as e:
-            self.auth_log.exception(f"Erro ao atualizar ultimo acesso do usuario: {user_id}")
-
-    def refresh_token(self, refres_token: str) -> Tuple[bool, str, Optional[dict]]:
-        """Gera novo token usando refresh token"""
-
-        try:
-            payload = JWTHandler.verify_token(refres_token, token_type="refresh")
-
-            if not payload:
-                return False, "Refresh token invalido ou expirado", None
-
-            usuario = self._buscar_usuario(user_id=payload["id_usuario"])
-
-            if not usuario or not usuario.get("ativo"):
-                return False, "Usuario invalido ou desativado", None
-
-            token_data = {
-                "user_id": payload["id_usuario"],
-                "username": payload["username"],
-                "tipo_usuario": payload["tipo_usuario"]
-            }
-
-            new_access_token = JWTHandler.create_refresh_token(token_data)
-
-            return True, "Token renovado", {
-                "access_token": new_access_token,
-                "token_type": "bearer"
-            }
-        except Exception as e:
-            self.auth_log.exception("Erro ao renovar token")
-            return False, "Erro ao renovar token", None
-
-    def alterar_senha(self, user_id: int, senha_atual: str, nova_senha: str) -> Tuple[bool, str]:
+    def alterar_senha(
+            self,
+            db: Session,
+            user_id: int,
+            senha_atual: str,
+            nova_senha: str
+    ) -> Tuple[bool, str]:
         """Permite usuário alterar própria senha"""
         try:
             # Validar nova senha
@@ -250,94 +211,83 @@ class AuthController:
             if not senha_valida:
                 return False, msg_senha
 
-            usuario = self._buscar_usuario(user_id=user_id)
+            usuario = self.buscar_usuario(db, user_id=user_id)
 
             if not usuario:
                 return False, "Usuário não encontrado"
 
-            # Verificar senha atual com bcrypt
-            if not self.password_handler.verify_password(senha_atual, usuario['senha_hash']):
-                self.auth_log.warning(f"Tentativa de alteração de senha com senha atual incorreta: user_id={user_id}")
+            # Verificar senha atual
+            if not self.password_handler.verify_password(senha_atual, usuario.senha_hash):
+                self.auth_log.warning(
+                    f"Tentativa de alteração de senha com senha atual incorreta: user_id={user_id}"
+                )
                 return False, "Senha atual incorreta"
 
-            # Gerar hash da nova senha
-            novo_hash = self.password_handler.hash_password(nova_senha)
-
-            # Atualizar
-            usuarios = []
-            with open(self.usuarios_data, 'r', encoding='utf-8') as f:
-                usuarios = [json.loads(line) for line in f if line.strip()]
-
-            for u in usuarios:
-                if u['id_usuario'] == user_id:
-                    u['senha_hash'] = novo_hash
-                    break
-
-            with open(self.usuarios_data, 'w', encoding='utf-8') as f:
-                for u in usuarios:
-                    f.write(json.dumps(u, ensure_ascii=False, default=str) + '\n')
+            # Atualizar senha
+            usuario.senha_hash = self.password_handler.hash_password(nova_senha)
+            db.commit()
 
             self.auth_log.info(f"Senha alterada com sucesso: user_id={user_id}")
             return True, "Senha alterada com sucesso"
 
         except Exception as e:
+            db.rollback()
             self.auth_log.exception(f"Erro ao alterar senha: user_id={user_id}")
             return False, "Erro ao alterar senha"
 
-    def desativar_usuario(self, user_id: int) -> Tuple[bool, str]:
+    def desativar_usuario(self, db: Session, user_id: int) -> Tuple[bool, str]:
         """Desativa usuário (soft delete)"""
         try:
-            usuarios = []
-            with open(self.usuarios_data, 'r', encoding='utf-8') as f:
-                usuarios = [json.loads(line) for line in f if line.strip()]
+            usuario = self.buscar_usuario(db, user_id=user_id)
 
-            encontrado = False
-            for usuario in usuarios:
-                if usuario['id_usuario'] == user_id:
-                    usuario['ativo'] = False
-                    encontrado = True
-                    break
-
-            if not encontrado:
+            if not usuario:
                 return False, "Usuário não encontrado"
 
-            with open(self.usuarios_data, 'w', encoding='utf-8') as f:
-                for usuario in usuarios:
-                    f.write(json.dumps(usuario, ensure_ascii=False, default=str) + '\n')
+            usuario.ativo = False
+            db.commit()
 
             self.auth_log.info(f"Usuário desativado: user_id={user_id}")
             return True, "Usuário desativado com sucesso"
 
         except Exception as e:
+            db.rollback()
             self.auth_log.exception(f"Erro ao desativar usuário: user_id={user_id}")
             return False, "Erro ao desativar usuário"
 
-    def listar_usuarios(self, tipo_usuario: Optional[str] = None, incluir_inativos: bool = False) -> list:
+    def listar_usuarios(
+            self,
+            db: Session,
+            tipo_usuario: Optional[str] = None,
+            incluir_inativos: bool = False
+    ) -> list:
         """Lista usuários (opcionalmente filtrados por tipo)"""
         try:
-            if verificar_arquivo_vazio(self.usuarios_data):
-                return []
+            query = db.query(Usuarios)
 
-            usuarios = []
-            with open(self.usuarios_data, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        usuario = json.loads(line)
+            # Filtrar por status ativo
+            if not incluir_inativos:
+                query = query.filter(Usuarios.ativo == True)
 
-                        # Filtrar por status ativo
-                        if not incluir_inativos and not usuario.get('ativo'):
-                            continue
+            # Filtrar por tipo
+            if tipo_usuario:
+                query = query.filter(Usuarios.tipo_usuario == tipo_usuario)
 
-                        # Filtrar por tipo
-                        if tipo_usuario and usuario.get('tipo_usuario') != tipo_usuario:
-                            continue
+            usuarios = query.all()
 
-                        # Remover dados sensíveis
-                        usuario_safe = {k: v for k, v in usuario.items()
-                                        if k not in ['senha_hash', 'cpf_criptografado', 'telefone_criptografado']}
-                        usuarios.append(usuario_safe)
-
-            return usuarios
+            # Converter para dict removendo dados sensíveis
+            return [
+                {
+                    'id_usuario': u.id_usuario,
+                    'username': u.username,
+                    'email': u.email,
+                    'nome_completo': u.nome_completo,
+                    'tipo_usuario': u.tipo_usuario,
+                    'ativo': u.ativo,
+                    'data_cadastro': u.data_cadastro.isoformat(),
+                    'ultimo_acesso': u.ultimo_acesso.isoformat() if u.ultimo_acesso else None
+                }
+                for u in usuarios
+            ]
 
         except Exception as e:
             self.auth_log.exception("Erro ao listar usuários")

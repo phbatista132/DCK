@@ -1,99 +1,117 @@
 from datetime import datetime, timedelta
-import pandas as pd
-from typing import Optional
+from typing import Optional, Tuple, List
+from sqlalchemy.orm import Session
 from src.utils.logKit.config_logging import get_logger
-from src.config import PRODUTOS_DATA
+from src.database import Produtos, MovimentacaoEstoque, Reserva
 
 
 class EstoqueController:
     def __init__(self):
-        self.estoque_data = PRODUTOS_DATA
         self.estoque_log = get_logger("LoggerEstoqueController", "DEBUG")
-        self.reservas = {}
 
-    def _carregar_estoque(self) -> pd.DataFrame:
-        """Metodo auxiliar para carregar estoque"""
-        return pd.read_csv(self.estoque_data, encoding='utf-8', sep=',')
 
-    def _salvar_estoque(self, df: pd.DataFrame) -> None:
-        """Metodo auxiliar para salvar estoque"""
-        df.to_csv(self.estoque_data, encoding='utf-8', sep=',', index=False)
+    def _limpar_reservas_expiradas(self, db: Session) -> int:
+        """
+        Remove reservas expiradas do banco
 
-    def _limpar_reservas_expiradas(self) -> None:
-        """Remove reservas que expiraram"""
-        agora = datetime.now()
-        produtos_expirados = [
-            produto_id for produto_id, dados in self.reservas.items()
-            if dados.get("expira_em") and dados["expira_em"] < agora
-        ]
+        Returns:
+            Quantidade de reservas limpas
+        """
+        try:
+            agora = datetime.now()
 
-        for produto_id in produtos_expirados:
-            qtd_liberada = self.reservas[produto_id]["quantidade"]
-            del self.reservas[produto_id]
-            self.estoque_log.info(
-                f"Reserva expirada automaticamente: Produto {produto_id}" f"{qtd_liberada} unidades liberadas")
+            reservas_expiradas = db.query(Reserva).filter(Reserva.ativa == True, Reserva.expira_em < agora).all()
 
-    def repor_estoque(self, id_item: int, qtd: int) -> str:
+            count = 0
+            for reserva in reservas_expiradas:
+
+                produto = db.query(Produtos).filter(Produtos.codigo == reserva.produto_id).first()
+
+                if produto:
+                    produto.quantidade_reservada -= reserva.quantidade
+
+                    # Garantir que não fique negativo
+                    if produto.quantidade_reservada < 0:
+                        produto.quantidade_reservada = 0
+
+                # Marcar reserva como inativa
+                reserva.ativa = False
+                count += 1
+
+                self.estoque_log.info(
+                    f"Reserva expirada: Produto {reserva.produto_id} - "
+                    f"{reserva.quantidade} unidades liberadas (User: {reserva.usuario_id})"
+                )
+
+            if count > 0:
+                db.commit()
+                self.estoque_log.info(f"{count} reservas expiradas limpas")
+
+            return count
+
+        except Exception as e:
+            db.rollback()
+            self.estoque_log.exception("Erro ao limpar reservas expiradas")
+            return 0
+
+    def repor_estoque(self, db: Session, id_item: int, qtd: int, usuario_id: Optional[int] = None) -> str:
         """Adiciona quantidade ao estoque"""
         try:
-            self.estoque_log.debug(f"Repondo produto {id_item} Quantidade {qtd}")
 
             if qtd <= 0:
                 self.estoque_log.warning("Quantidade menor/igual a zero")
                 return "Quantidade menor ou igual a zero, sem possibilidade de reposição"
 
-            df = self._carregar_estoque()
+            produto = db.query(Produtos).filter(Produtos.codigo == id_item, Produtos.ativo == True).first()
 
-            if id_item not in df['codigo'].values:
-                self.estoque_log.warning("Codigo não localizado")
-                return "id não localizado"
+            if not produto:
+                self.estoque_log.warning(f"Produto {id_item} não localizado ou desativado")
+                return "Produto não localizado ou desativado"
 
-            idx = df[df['codigo'] == id_item].index[0]
-            nome_produto = df.loc[idx, 'nome']
-            qtd_anterior = df.loc[idx, 'quantidade_estoque']
-            produto_ativo = df.loc[idx, 'ativo']
+            estoque_anterior = produto.quantidade_estoque
+            produto.quantidade_estoque += qtd
 
-            if not produto_ativo:
-                self.estoque_log.warning(f"Produto: {id_item} se encontra desativado")
-                return "Sem possibilidade de repor produto desativados"
+            movimentacao = MovimentacaoEstoque(
+                produto_id=id_item,
+                tipo='ENTRADA',
+                quantidade=qtd,
+                estoque_anterior=estoque_anterior,
+                estoque_posterior=produto.quantidade_estoque,
+                usuario_id=usuario_id,
+                observacao=f"Reposição de estoque"
+            )
+            db.add(movimentacao)
+            db.commit()
 
-            df.loc[idx, 'quantidade_estoque'] += qtd
-            self._salvar_estoque(df)
-            self.estoque_log.info(f"Produto {nome_produto}: {qtd_anterior} -> {qtd_anterior + qtd} unidades")
-
+            self.estoque_log.info(
+                f"Produto {produto.nome} reposto em {qtd} unidades "
+                f"({estoque_anterior} → {produto.quantidade_estoque})"
+            )
             return f"Item reposto com sucesso"
 
         except Exception as e:
+            db.rollback()
             self.estoque_log.exception("Erro ao repor estoque")
             return f'Erro interno ao repor estoque'
 
-    def  produto_habilitado(self, id_produto: int) -> tuple[bool, str]:
+    def produto_habilitado(self, db: Session, id_produto: int) -> tuple[bool, str]:
         """Verifica se produto esta habilitado"""
         try:
 
-            self.estoque_log.debug(f"Verificando se produto {id_produto} esta habilitado")
-            df = self._carregar_estoque()
+            produto = db.query(Produtos).filter(Produtos.codigo == id_produto, Produtos.ativo == True).first()
 
-            if id_produto not in df['codigo'].values:
+            if not produto:
                 self.estoque_log.warning(f"Produto: {id_produto} não localizado")
-                return False, "Produto não localizado"
+                return False, "Produto não localizado ou não habilitado"
 
-            idx = df['codigo'] == id_produto
-            habilitado = df.loc[idx, 'ativo'].values[0]
-            nome_produto = df.loc[idx, 'nome'].values[0]
-
-            if not habilitado:
-                self.estoque_log.warning(f"Produto: {nome_produto} desabilitado para uso")
-                return False, f"Produto: {nome_produto} desabilitado"
-
-            self.estoque_log.info(f"Produto: {nome_produto} Habilitado em estoque")
-            return True, f'Produto: {nome_produto} Habilitado'
+            self.estoque_log.info(f"Produto: {produto.nome} Habilitado em estoque")
+            return True, f'Produto: {produto.nome} Habilitado'
 
         except Exception as e:
             self.estoque_log.exception("Erro ao verificar produto")
             return False, f'Erro: {e}'
 
-    def verificar_disponibilidade(self, produto_id: int, quantidade: int) -> tuple[bool, int]:
+    def verificar_disponibilidade(self, db: Session, produto_id: int, quantidade: int) -> tuple[bool, int]:
         """
         Verifica disponibilidade real considerando reservas
 
@@ -101,143 +119,302 @@ class EstoqueController:
             (disponível: bool, quantidade_disponivel: int)
         """
         try:
-            self._limpar_reservas_expiradas()
-            df = self._carregar_estoque()
-            if produto_id not in df['codigo'].values:
+            self._limpar_reservas_expiradas(db)
+
+            produto = db.query(Produtos).filter(Produtos.codigo == produto_id).first()
+
+            if not produto:
                 return False, 0
 
-            estoque_real = int(df.loc[df['codigo'] == produto_id, 'quantidade_estoque'].values[0])
-            reservado = self.reservas.get(produto_id, {}).get("quantidade", 0)
-            disponivel = estoque_real - reservado
+            quantidade_disponivel = produto.quantidade_estoque - produto.quantidade_reservada
 
-            return disponivel >= quantidade, disponivel
-        except Exception as e:
-            self.estoque_log.exception("Erro ao verificar disponibilidade")
+            return quantidade_disponivel >= quantidade, quantidade_disponivel
+
+        except Exception:
             return False, 0
 
-    def reservar_estoque(self, produto_id: int, quantidade: int) -> bool:
+    def reservar_estoque(self, db: Session, produto_id: int, quantidade: int, usuario_id: int,
+                         minutos_expiracao: int = 30) -> Tuple[bool, Optional[int]]:
         """
         Reserva estoque temporariamente (para carrinho)
         Reserva expira em 30 minutos
         """
         try:
-            self.estoque_log.debug(f"Tentando reservar {quantidade} unidade do produto {produto_id}")
 
             if quantidade <= 0:
                 self.estoque_log.warning("Quantidade inválida para reserva")
                 return False
 
-            self._limpar_reservas_expiradas()
-            df = self._carregar_estoque()
+            self._limpar_reservas_expiradas(db)
 
-            if produto_id not in self.reservas:
-                self.reservas[produto_id] = {'quantidade': 0, 'expira_em': None}
+            produto = db.query(Produtos).filter(Produtos.codigo == produto_id).first()
 
-            estoque_real = df.loc[df['codigo'] == produto_id, 'quantidade_estoque'].values[0]
-            reservado = self.reservas.get(produto_id, {}).get('quantidade', 0)
+            if not produto:
+                self.estoque_log.warning(f"Produto: {produto_id} não encotrado")
+                return False, None
+
+            estoque_real = produto.quantidade_estoque
+            reservado = produto.quantidade_reservada
             disponivel = estoque_real - reservado
 
-            if disponivel >= quantidade:
-                self.reservas[produto_id] = {'quantidade': reservado + quantidade,
-                                             'expira_em': datetime.now() + timedelta(minutes=30)}
-                self.estoque_log.info(
-                    f"Reserva confirmada: {quantidade} unidades do produto {produto_id} "
-                    f"(disponível: {disponivel}, expira em 30min)"
+            if disponivel < quantidade:
+                self.estoque_log.warning(
+                    f"Reserva negada: Produto {produto_id} - "
+                    f"Solicitado: {quantidade}, Disponível: {disponivel}"
                 )
-                return True
+                return False, None
 
-            self.estoque_log.warning(
-                f"Reserva negada: Produto {produto_id} - Solicitado: {quantidade}, "
-                f"Disponível: {disponivel}"
+            expira_em = datetime.now() + timedelta(minutes=minutos_expiracao)
+
+            reserva = Reserva(
+                produto_id=produto_id,
+                usuario_id=usuario_id,
+                quantidade=quantidade,
+                expira_em=expira_em
             )
-            return False
+            produto.quantidade_reservada += quantidade
+
+            db.add(reserva)
+            db.commit()
+            db.refresh(reserva)
+
+            self.estoque_log.info(
+                f"Reserva criada: {quantidade} unidades do produto {produto_id} "
+                f"para usuário {usuario_id} (ID Reserva: {reserva.id_reserva}, "
+                f"expira em {minutos_expiracao}min)"
+            )
+
+            return True, reserva.id_reserva
+
         except Exception as e:
             self.estoque_log.exception(f"Erro ao reservar produto {produto_id}")
-            return False
+            return False, None
 
-    def liberar_reserva(self, produto_id: int, quantidade: int):
-        """Libera reserva de estoque (item removido do carrinho)"""
-        try:
-            if produto_id not in self.reservas:
-                self.estoque_log.warning(f"Produto {produto_id} não tem reservas ativas")
-                return "Sem reservas para liberar"
-
-            self.reservas[produto_id]["quantidade"] -= quantidade
-
-            if self.reservas[produto_id]['quantidade'] <= 0:
-                del self.reservas[produto_id]
-                self.estoque_log.info(f"Todas as reservas do produto {produto_id} foram liberadas")
-            else:
-                self.estoque_log.info(f"Reserva liberada: {quantidade} unidades do produto {produto_id}")
-
-                return "Reserva liberada"
-
-        except Exception as e:
-            self.estoque_log.exception(f"Erro ao liberar reserva do produto {produto_id}")
-            return f"Erro: {e}"
-
-    def saida_estoque(self, id_produto: int, quantidade: int) -> tuple[bool, str]:
+    def liberar_reserva(self, db: Session, reserva_id: Optional[int] = None, produto_id: Optional[int] = None,
+                        usuario_id: Optional[int] = None) -> Tuple[bool, str]:
         """
-        Realiza baixa real no estoque (venda finalizada)
-        Também libera a reserva correspondente
-        """
-        try:
-            df = self._carregar_estoque()
+        Libera reserva de estoque (item removido do carrinho)
 
-            if id_produto not in df['codigo'].values:
-                self.estoque_log.error(f"Produto {id_produto} não encontrado para saida")
-                return False, "Produto não encontrado"
-
-            idx = df[df['codigo'] == id_produto].index[0]
-            nome_produto = df.loc[idx, 'nome']
-            estoque_atual = int(df.loc[idx, 'quantidade_estoque'])
-
-            if estoque_atual < quantidade:
-                self.estoque_log.error(
-                    f"ERRO CRÍTICO: Tentativa de saída maior que estoque! "
-                    f"Produto: {nome_produto} (ID: {id_produto}), "
-                    f"Estoque atual: {estoque_atual}, Solicitado: {quantidade}"
-                )
-                return False, "Estoque insuficiente (erro crítico - contate o suporte)"
-
-            df.loc[idx, 'quantidade_estoque'] -= quantidade
-            self._salvar_estoque(df)
-
-            self.liberar_reserva(id_produto, quantidade)
-            self.estoque_log.info(
-                f"Saída de estoque: {nome_produto} (ID: {id_produto}) - "
-                f"{quantidade} unidades | Estoque: {estoque_atual} → {estoque_atual - quantidade}"
-            )
-
-            return True, f"Saída realizada: {quantidade} unidades de '{nome_produto}'"
-
-        except Exception as e:
-            self.estoque_log.exception("Erro ao realizar saida de estoque")
-            return False, f'Erro: {e}'
-
-    def obter_info_reservas(self, produto_id: Optional[int] = None) -> dict:
-        """
-        Retorna informações sobre reservas (útil para debug/dashboard)
+        Pode liberar por:
+        - reserva_id: Libera uma reserva específica
+        - produto_id + usuario_id: Libera todas as reservas daquele produto para aquele usuário
 
         Args:
-            produto_id: Se fornecido, retorna info apenas desse produto
+            db: Sessão do banco
+            reserva_id: ID da reserva específica
+            produto_id: ID do produto
+            usuario_id: ID do usuário
+
+        Returns:
+            (sucesso: bool, mensagem: str)
         """
-        self._limpar_reservas_expiradas()
+        try:
+            query = db.query(Reserva).filter(Reserva.ativa == True)
 
-        if produto_id:
-            if produto_id in self.reservas:
-                return {
-                    produto_id: {
-                        "quantidade": self.reservas[produto_id]["quantidade"],
-                        "expira_em": self.reservas[produto_id]["expira_em"].isoformat()
-                    }
-                }
-            return {}
-        return {
-            pid: {
-                "quantidade": dados["quantidade"],
-                "expira_em": dados["expira_em"].isoformat() if dados["expira_em"] else None
-            }
-            for pid, dados in self.reservas.items()
-        }
+            if reserva_id:
+                # Liberar reserva específica
+                query = query.filter(Reserva.id_reserva == reserva_id)
+            elif produto_id and usuario_id:
+                # Liberar todas as reservas daquele produto para aquele usuário
+                query = query.filter(
+                    Reserva.produto_id == produto_id,
+                    Reserva.usuario_id == usuario_id
+                )
+            else:
+                return False, "Necessário fornecer reserva_id ou (produto_id + usuario_id)"
 
+            reservas = query.all()
+
+            if not reservas:
+                self.estoque_log.warning("Nenhuma reserva ativa encontrada")
+                return False, "Sem reservas para liberar"
+
+            total_liberado = 0
+            for reserva in reservas:
+                # Liberar quantidade reservada do produto
+                produto = db.query(Produtos).filter(
+                    Produtos.codigo == reserva.produto_id
+                ).first()
+
+                if produto:
+                    produto.quantidade_reservada -= reserva.quantidade
+
+                    # Garantir que não fique negativo
+                    if produto.quantidade_reservada < 0:
+                        produto.quantidade_reservada = 0
+
+                # Marcar reserva como inativa
+                reserva.ativa = False
+                total_liberado += reserva.quantidade
+
+                self.estoque_log.info(
+                    f"Reserva liberada: Produto {reserva.produto_id} - "
+                    f"{reserva.quantidade} unidades (User: {reserva.usuario_id})"
+                )
+
+            db.commit()
+
+            return True, f"{total_liberado} unidades liberadas"
+
+        except Exception as e:
+            db.rollback()
+            self.estoque_log.exception("Erro ao liberar reserva")
+            return False, f"Erro: {e}"
+
+    def saida_estoque(
+            self,
+            db: Session,
+            id_produto: int,
+            quantidade: int,
+            usuario_id: int,
+            venda_id: Optional[int] = None
+    ) -> Tuple[bool, str]:
+        """
+        Realiza baixa real no estoque (venda finalizada)
+
+        Fluxo:
+        1. Diminui quantidade_estoque
+        2. Diminui quantidade_reservada
+        3. Desativa reservas do usuário para este produto
+        4. Registra movimentação
+        """
+        try:
+            produto = db.query(Produtos).filter(Produtos.codigo == id_produto).first()
+
+            if not produto:
+                return False, "Produto não encontrado"
+
+            estoque_atual = produto.quantidade_estoque
+
+            # Validar estoque suficiente
+            if estoque_atual < quantidade:
+                self.estoque_log.error(
+                    f"ERRO CRÍTICO: Estoque insuficiente! "
+                    f"Produto: {produto.nome} (ID: {id_produto}), "
+                    f"Estoque: {estoque_atual}, Solicitado: {quantidade}"
+                )
+                return False, "Estoque insuficiente"
+
+            # 1. Baixa no estoque real
+            produto.quantidade_estoque -= quantidade
+
+            # 2. Liberar da quantidade reservada
+            if produto.quantidade_reservada >= quantidade:
+                produto.quantidade_reservada -= quantidade
+            else:
+                # Se por algum motivo não há reserva suficiente, zerar
+                produto.quantidade_reservada = 0
+
+            # 3. Desativar reservas do usuário para este produto
+            reservas_usuario = db.query(Reserva).filter(
+                Reserva.produto_id == id_produto,
+                Reserva.usuario_id == usuario_id,
+                Reserva.ativa == True
+            ).all()
+
+            for reserva in reservas_usuario:
+                reserva.ativa = False
+
+            # 4. Registrar movimentação
+            movimentacao = MovimentacaoEstoque(
+                produto_id=id_produto,
+                tipo='SAIDA',
+                quantidade=-quantidade,
+                estoque_anterior=estoque_atual,
+                estoque_posterior=produto.quantidade_estoque,
+                usuario_id=usuario_id,
+                venda_id=venda_id,
+                observacao=f"Venda finalizada (ID: {venda_id})"
+            )
+
+            db.add(movimentacao)
+            db.commit()
+
+            self.estoque_log.info(
+                f"Saída de estoque: {produto.nome} (ID: {id_produto}) - "
+                f"{quantidade} unidades | Estoque: {estoque_atual} → {produto.quantidade_estoque}"
+            )
+
+            return True, f"Saída realizada: {quantidade} unidades de '{produto.nome}'"
+
+        except Exception as e:
+            db.rollback()
+            self.estoque_log.exception("Erro ao realizar saída de estoque")
+            return False, f'Erro: {e}'
+
+    def obter_reservas_usuario(self, db: Session, usuario_id: int) -> List[Reserva]:
+        """
+        Retorna todas as reservas ativas de um usuário
+
+        Útil para:
+        - Exibir carrinho
+        - Verificar tempo restante
+        - Limpar carrinho
+        """
+        try:
+            # Limpar expiradas primeiro
+            self._limpar_reservas_expiradas(db)
+
+            reservas = db.query(Reserva).filter(
+                Reserva.usuario_id == usuario_id,
+                Reserva.ativa == True
+            ).order_by(Reserva.data_criacao.desc()).all()
+
+            return reservas
+
+        except Exception as e:
+            self.estoque_log.exception(f"Erro ao buscar reservas do usuário {usuario_id}")
+            return []
+
+    def limpar_carrinho_usuario(self, db: Session, usuario_id: int) -> Tuple[bool, str]:
+        """
+        Limpa todas as reservas (carrinho) de um usuário
+
+        Args:
+            db: Sessão do banco
+            usuario_id: ID do usuário
+
+        Returns:
+            (sucesso: bool, mensagem: str)
+        """
+        try:
+            reservas = db.query(Reserva).filter(
+                Reserva.usuario_id == usuario_id,
+                Reserva.ativa == True
+            ).all()
+
+            if not reservas:
+                return True, "Carrinho já estava vazio"
+
+            total_liberado = 0
+            produtos_afetados = set()
+
+            for reserva in reservas:
+                # Liberar do produto
+                produto = db.query(Produtos).filter(
+                    Produtos.codigo == reserva.produto_id
+                ).first()
+
+                if produto:
+                    produto.quantidade_reservada -= reserva.quantidade
+                    if produto.quantidade_reservada < 0:
+                        produto.quantidade_reservada = 0
+                    produtos_afetados.add(produto.nome)
+
+                # Desativar reserva
+                reserva.ativa = False
+                total_liberado += reserva.quantidade
+
+            db.commit()
+
+            self.estoque_log.info(
+                f"Carrinho limpo: Usuário {usuario_id} - "
+                f"{total_liberado} unidades liberadas de {len(produtos_afetados)} produtos"
+            )
+
+            return True, f"Carrinho limpo: {total_liberado} unidades liberadas"
+
+        except Exception as e:
+            db.rollback()
+            self.estoque_log.exception(f"Erro ao limpar carrinho do usuário {usuario_id}")
+            return False, f"Erro: {e}"
