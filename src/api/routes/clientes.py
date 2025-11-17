@@ -1,4 +1,6 @@
 from typing import List
+from sqlalchemy.orm import Session
+from src.database.connection import get_db
 from src.utils.logKit.config_logging import get_logger
 from fastapi import APIRouter, HTTPException, Query, status, Depends
 from src.controllers.cliente_controller import ClienteController
@@ -14,8 +16,12 @@ def get_cliente_controller() -> ClienteController:
 
 
 @cliente_router.post("/register", status_code=status.HTTP_201_CREATED,
-                     dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
-async def cliente_register(cliente: ClienteCreate, controller: ClienteController = Depends(get_cliente_controller)):
+                     dependencies=[Depends(get_current_user)],
+                     response_model=dict,
+                     summary="Registrar novo cliente",
+                     description="Cadastra um cliente no sistema")
+async def cliente_register(cliente: ClienteCreate, db: Session = Depends(get_db),
+                           controller: ClienteController = Depends(get_cliente_controller)):
     """
     Cadastra novo cliente no sistema
 
@@ -25,17 +31,17 @@ async def cliente_register(cliente: ClienteCreate, controller: ClienteController
     - CPF não duplicado
     """
     try:
-        resultado = controller.cadastrar_cliente(**cliente.model_dump())
+        resultado = controller.cadastrar_cliente(db, **cliente.model_dump())
 
         if "sucesso" in resultado:
             return {
                 "message": resultado,
-                "database": {
+                "data": {
                     "nome": cliente.nome
                 }
             }
         else:
-            raise HTTPException(status_code=409, detail=resultado)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=resultado)
 
     except HTTPException:
         raise
@@ -45,9 +51,9 @@ async def cliente_register(cliente: ClienteCreate, controller: ClienteController
 
 
 @cliente_router.get("/search", dependencies=[Depends(get_current_user)])
-async def cliente_search(cpf: str = Query(..., min_length=11, max_length=14, description="CPF do cliente"),
-                         controller: ClienteController = Depends(get_cliente_controller)
-                         ):
+async def cliente_search(db: Session = Depends(get_db),
+                         cpf: str = Query(..., min_length=11, max_length=14, description="CPF do cliente"),
+                         controller: ClienteController = Depends(get_cliente_controller)):
     """
     Buscar cliente por CPF
 
@@ -57,7 +63,7 @@ async def cliente_search(cpf: str = Query(..., min_length=11, max_length=14, des
         404: CLiente não encontrado
     """
     try:
-        resultado = controller.buscar_cliente(cpf)
+        resultado = controller.buscar_cliente(db, cpf)
         if not resultado:
             raise HTTPException(status_code=404, detail="Cliente não encontrado")
         return resultado
@@ -68,8 +74,8 @@ async def cliente_search(cpf: str = Query(..., min_length=11, max_length=14, des
         raise HTTPException(status_code=500, detail="Erro interno ao buscar cliente")
 
 
-@cliente_router.put("/edit_registration", dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
-async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate,
+@cliente_router.put("/edit_registration", dependencies=[Depends(require_admin_or_gerente)])
+async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate, db: Session = Depends(get_db),
                                     controller: ClienteController = Depends(get_cliente_controller)):
     """
     Edita dados de contato do cliente
@@ -86,7 +92,7 @@ async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate,
         if not dados_atualizacao:
             raise HTTPException(status_code=400, detail="Nenhum campo fornecido para atualização")
 
-        resultado = controller.editar_cadastro(cpf, **dados_atualizacao)
+        resultado = controller.editar_cadastro(db, cpf, **dados_atualizacao)
 
         if "sucesso" in resultado:
             return {
@@ -105,8 +111,9 @@ async def cliente_edit_registration(cpf: str, cliente_update: ClienteUpdate,
         raise HTTPException(status_code=500, detail="Erro interno ao editar cliente")
 
 
-@cliente_router.delete("/disable", dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
-async def cliente_disabled(cpf: str, controller: ClienteController = Depends(get_cliente_controller)):
+@cliente_router.delete("/disable", dependencies=[Depends(require_admin_or_gerente)])
+async def cliente_disabled(cpf: str, db: Session = Depends(get_db),
+                           controller: ClienteController = Depends(get_cliente_controller)):
     """
     Desativa cliente (soft delete)
 
@@ -114,7 +121,7 @@ async def cliente_disabled(cpf: str, controller: ClienteController = Depends(get
     Cliente inativos não aparecem em listagem e não podem fazer compras
     """
     try:
-        resultado = controller.desativar_cliente(cpf)
+        resultado = controller.desativar_cliente(db=db, cpf=cpf)
 
         if "desativado" in resultado or "sucesso" in resultado:
             return {"message": resultado}
@@ -135,6 +142,7 @@ async def cliente_disabled(cpf: str, controller: ClienteController = Depends(get
 async def list_clients(
         skip: int = Query(0, ge=0, description="Numero de registros a pular"),
         limit: int = Query(100, ge=1, le=1000, description="Maximo de registros"),
+        db: Session = Depends(get_db),
         controller: ClienteController = Depends(get_cliente_controller)
 ):
     """
@@ -147,7 +155,7 @@ async def list_clients(
     """
 
     try:
-        resultado = controller.listar_clientes()
+        resultado = controller.listar_clientes(db)
 
         if isinstance(resultado, str):
             return []

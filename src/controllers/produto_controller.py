@@ -111,7 +111,7 @@ class ProdutoController:
                 return "Dado não localizado"
 
             resultado = [
-                f"Produto: {p.nome} | Modelo {p.modelo} | Estoque: {p.quantidade_estoque} | Valor: {p.valor}"
+                f"ID:{p.codigo} | Produto: {p.nome} | Modelo {p.modelo} | Estoque: {p.quantidade_estoque} | Valor: {p.valor}"
                 for p in produtos
             ]
 
