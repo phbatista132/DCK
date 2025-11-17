@@ -11,7 +11,6 @@ from src.utils.validators import validar_cpf
 from src.utils.logKit.config_logging import get_logger
 
 
-
 class AuthController:
     """Controller para autenticação e gerenciamento de usuários"""
 
@@ -19,17 +18,8 @@ class AuthController:
         self.auth_log = get_logger("LoggerAuthController", "INFO")
         self.password_handler = PasswordHandler()
 
-    def registrar_usuario(
-            self,
-            db: Session,
-            username: str,
-            email: str,
-            senha: str,
-            nome_completo: str,
-            tipo_usuario: str = "cliente",
-            cpf: Optional[str] = None,
-            telefone: Optional[str] = None
-    ) -> Tuple[bool, str, Optional[dict]]:
+    def registrar_usuario(self, db: Session, username: str, email: str, senha: str, nome_completo: str,
+                          tipo_usuario: str = "cliente", cpf: Optional[str] = None) -> Tuple[bool, str, Optional[dict]]:
         """
         Registra novo usuário no sistema
 
@@ -40,8 +30,6 @@ class AuthController:
             senha: Senha em texto plano (será hasheada)
             nome_completo: Nome completo
             tipo_usuario: admin, gerente, vendedor, cliente
-            cpf: CPF (será criptografado)
-            telefone: Telefone (será criptografado)
         """
         try:
             # Validações básicas
@@ -67,7 +55,6 @@ class AuthController:
             senha_hash = self.password_handler.hash_password(senha)
 
             # Criptografar dados sensíveis
-
 
             # Criar usuário
             usuario = Usuarios(
@@ -173,13 +160,7 @@ class AuthController:
             self.auth_log.exception(f"Erro ao realizar login: {username}")
             return False, "Erro interno ao fazer login", None
 
-    def buscar_usuario(
-            self,
-            db: Session,
-            user_id: int = None,
-            username: str = None,
-            email: str = None
-    ) -> Optional[Usuarios]:
+    def buscar_usuario(self,db: Session,user_id: int = None, username: str = None, email: str = None) -> Optional[Usuarios]:
         """Busca usuário por ID, username ou email"""
         try:
             query = db.query(Usuarios)

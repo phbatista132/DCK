@@ -117,7 +117,7 @@ class CarrinhoController:
             if item_existente:
                 nova_quantidade = item_existente.quantidade + quantidade
 
-                disponivel, _ = self.estoque_controller.verificar_disponibilidade(db, produto_id, quantidade)
+                disponivel, _ = self.estoque_controller.verificar_disponibilidade(db, produto_id, quantidade, usuario_id)
 
                 if not disponivel:
                     return False, "Estoque insuficiente para adicionar esta quantidade"
@@ -135,7 +135,7 @@ class CarrinhoController:
                     f"Nova quantidade: {nova_quantidade}")
             else:
 
-                disponivel, _ = self.estoque_controller.verificar_disponibilidade(db, produto_id, quantidade)
+                disponivel, _ = self.estoque_controller.verificar_disponibilidade(db, produto_id, quantidade, usuario_id)
 
                 if not disponivel:
                     return False, "Estoque insuficiente"

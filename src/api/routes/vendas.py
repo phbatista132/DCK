@@ -3,7 +3,9 @@ from src.controllers.venda_controller import VendaController
 from src.api.schemas import FinalizarVendaResponse, FinalizarVendaRequest, ItemCarrinhoResponse, ItemCarrinhoRequest, \
     CarrinhoResponse, AlterarQuantidadeRequest
 from src.api.middleware import require_vendedor_or_above, require_admin_or_gerente
+from src.database import get_db
 from src.utils.logKit import get_logger
+from sqlalchemy.orm import Session
 
 vendas_router = APIRouter(prefix="/sales", tags=["sales"])
 endpoint_vendas_log = get_logger("LoggerVendas", "WARNING")
@@ -16,8 +18,8 @@ def get_venda_controller() -> VendaController:
 @vendas_router.post("/cart/items", status_code=status.HTTP_201_CREATED, summary="Adicionar item ao carrinho")
 async def adicionar_ao_carrinho(item: ItemCarrinhoRequest,
                                 user: dict = Depends(require_vendedor_or_above),
-                                controller: VendaController = Depends(get_venda_controller)
-                                ):
+                                controller: VendaController = Depends(get_venda_controller),
+                                db: Session = Depends(get_db)):
     """
     ## Adiciona um produto ao carrinho de compras
 
@@ -44,41 +46,41 @@ async def adicionar_ao_carrinho(item: ItemCarrinhoRequest,
             f"Adicionando ao carrinho - Produto: {item.produto_id}, Qtd: {item.quantidade}"
         )
 
-        resultado = controller.adicionar_item(item.produto_id, item.quantidade, user_id=user['user_id'])
+        sucesso, resultado = controller.adicionar_item_carrinho(db=db, produto_id=item.produto_id,
+                                                                quantidade=item.quantidade,
+                                                                usuario_id=user['user_id'])
 
-        if "adicionado" in resultado.lower() or "sucesso" in resultado.lower():
-            return {
-                "success": True,
-                "message": resultado,
-                "produto_id": item.produto_id,
-                "quantidade": item.quantidade,
-                "vendedor": user['username']
-            }
+        if not sucesso:
+            if "não encontrado" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=resultado
+                )
 
-        elif "não encontrado" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=resultado
-            )
+            elif "desabilitado" in resultado.lower() or "desativado" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Produto desativado"
+                )
 
-        elif "desabilitado" in resultado.lower() or "desativado" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Produto desativado"
-            )
+            elif "indisponivel" in resultado.lower() or "insuficiente" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Estoque insuficiente"
+                )
 
-        elif "indisponivel" in resultado.lower() or "insuficiente" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Estoque insuficiente"
-            )
-
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=resultado
-            )
-
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=resultado
+                )
+        return {
+            "sucess": True,
+            "message": resultado,
+            "produto_id": item.produto_id,
+            "quantidade": item.quantidade,
+            "vendedor": user['username']
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -92,6 +94,7 @@ async def adicionar_ao_carrinho(item: ItemCarrinhoRequest,
 @vendas_router.get("/cart", status_code=status.HTTP_200_OK, response_model=CarrinhoResponse,
                    dependencies=[Depends(require_vendedor_or_above)], summary="Visualizar carrinho")
 async def ver_carrinho(controller: VendaController = Depends(get_venda_controller),
+                       db: Session = Depends(get_db),
                        user: dict = Depends(require_vendedor_or_above)) -> CarrinhoResponse:
     """
     ## Retorna o carrinho atual com todos os itens
@@ -108,7 +111,7 @@ async def ver_carrinho(controller: VendaController = Depends(get_venda_controlle
     ```
     """
     try:
-        carrinho = controller.ver_carinho(user['user_id'])
+        carrinho = controller.ver_carrinho(db=db, usuario_id=user['user_id'])
 
         if not carrinho:
             return CarrinhoResponse(
@@ -118,13 +121,20 @@ async def ver_carrinho(controller: VendaController = Depends(get_venda_controlle
                 itens=[]
             )
 
-        itens = [ItemCarrinhoResponse(**item) for item in carrinho]
-        subtotal = sum(item.subtotal for item in itens)
+        itens = []
+        for item in carrinho.itens:
+            itens.append(ItemCarrinhoResponse(
+                produto_id=item.produto_id,
+                nome=item.produto.nome,
+                quantidade=item.quantidade,
+                preco_unitario=float(item.preco_unitario),
+                subtotal=float(item.subtotal)
+            ))
 
         return CarrinhoResponse(
             success=True,
             total_itens=len(itens),
-            subtotal=subtotal,
+            subtotal=float(carrinho.subtotal),
             itens=itens
         )
 
@@ -138,6 +148,7 @@ async def ver_carrinho(controller: VendaController = Depends(get_venda_controlle
 
 @vendas_router.delete("/cart/items/{produto_id}", status_code=status.HTTP_200_OK, summary="Remover item do carrinho")
 async def remover_do_carrinho(produto_id: int = Path(..., gt=0, description="ID do produto"),
+                              db: Session = Depends(get_db),
                               controller: VendaController = Depends(get_venda_controller),
                               user: dict = Depends(require_vendedor_or_above)):
     """
@@ -156,30 +167,30 @@ async def remover_do_carrinho(produto_id: int = Path(..., gt=0, description="ID 
     try:
         endpoint_vendas_log.info(f"User {user['username']} removendo produto {produto_id}")
 
-        resultado = controller.remover_item(produto_id, user['user_id'])
+        sucesso, resultado = controller.remover_item_carrinho(db=db, produto_id=produto_id, usuario_id=user['user_id'])
 
-        if "removido" in resultado.lower() or "sucesso" in resultado.lower():
-            return {
-                "success": True,
-                "message": resultado,
-                "produto_id": produto_id
-            }
+        if not sucesso:
+            if "não encontrado" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Item não está no carrinho"
+                )
 
-        elif "não encontrado" in resultado.lower() or "não encotrado" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Item não está no carrinho"
-            )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=resultado
+                )
 
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=resultado
-            )
+        return {
+            "success": True,
+            "message": resultado,
+            "produto_id": produto_id
+        }
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         endpoint_vendas_log.exception(f"Erro ao remover item {produto_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -192,6 +203,7 @@ async def remover_do_carrinho(produto_id: int = Path(..., gt=0, description="ID 
 async def alterar_quantidade_carrinho(
         produto_id: int = Path(..., gt=0, description="ID do produto"),
         alteracao: AlterarQuantidadeRequest = ...,
+        db: Session = Depends(get_db),
         user: dict = Depends(require_vendedor_or_above),
         controller: VendaController = Depends(get_venda_controller)):
     """
@@ -218,33 +230,37 @@ async def alterar_quantidade_carrinho(
             f"Produto: {produto_id}, Nova qtd: {alteracao.nova_quantidade}"
         )
 
-        resultado = controller.alterar_quantidade(produto_id, alteracao.nova_quantidade, user['user_id'])
+        sucesso, resultado = controller.alterar_quantidade_carrinho(
+            db=db,
+            produto_id=produto_id,
+            nova_quantidade=alteracao.nova_quantidade,
+            usuario_id=user['user_id'])
 
-        if "sucesso" in resultado.lower() or "alterada" in resultado.lower():
-            return {
-                "success": True,
-                "message": resultado,
-                "produto_id": produto_id,
-                "nova_quantidade": alteracao.nova_quantidade
-            }
+        if not sucesso:
+            if "não encontrado" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Item não está no carrinho"
+                )
 
-        elif "não encontrado" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Item não está no carrinho"
-            )
+            elif "insuficiente" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Estoque insuficiente para a quantidade solicitada"
+                )
 
-        elif "insuficiente" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Estoque insuficiente para a quantidade solicitada"
-            )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=resultado
+                )
 
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=resultado
-            )
+        return {
+            "success": True,
+            "message": resultado,
+            "produto_id": produto_id,
+            "nova_quantidade": alteracao.nova_quantidade
+        }
 
     except HTTPException:
         raise
@@ -259,6 +275,7 @@ async def alterar_quantidade_carrinho(
 @vendas_router.post("/checkout", status_code=status.HTTP_201_CREATED, response_model=FinalizarVendaResponse,
                     summary="Finalizar venda")
 async def finalizar_venda(venda: FinalizarVendaRequest, controller: VendaController = Depends(get_venda_controller),
+                          db: Session = Depends(get_db),
                           user: dict = Depends(require_vendedor_or_above)) -> FinalizarVendaResponse:
     """
     ## Finaliza a venda e processa pagamento
@@ -294,57 +311,51 @@ async def finalizar_venda(venda: FinalizarVendaRequest, controller: VendaControl
             f"Pagamento: {venda.forma_pagamento}, Desconto: {venda.percentual_desconto}%"
         )
 
-        resultado = controller.finalizar_venda(
+        sucesso, resultado, dados_venda = controller.finalizar_venda(
+            db=db,
+            usuario_id=user['user_id'],
             cpf_cliente=venda.cpf_cliente,
             forma_pagamento=venda.forma_pagamento,
             percentual_desconto=venda.percentual_desconto,
-            user_id=user['user_id'],
-            username=user['username']
         )
 
-        if "finalizada" in resultado.lower() or "sucesso" in resultado.lower():
-            # Extrair ID e total da mensagem (formato: "Compra finalizada! ID: 42 | Total: R$ 6300.00")
-            import re
-            match_id = re.search(r'ID:\s*(\d+)', resultado)
-            match_total = re.search(r'R\$\s*([\d,.]+)', resultado)
+        if not sucesso:
+            if "vazio" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Carrinho vazio"
+                )
 
-            id_venda = int(match_id.group(1)) if match_id else None
-            total_str = match_total.group(1).replace(',', '.') if match_total else "0"
-            total = float(total_str)
+            elif "não encontrado" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Cliente não encontrado"
+                )
 
-            desconto_aplicado = (total * venda.percentual_desconto / 100) if venda.percentual_desconto > 0 else 0
+            elif "inativo" in resultado.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Cliente inativo não pode realizar compras"
+                )
 
-            return FinalizarVendaResponse(
-                success=True,
-                message="Venda finalizada com sucesso",
-                id_venda=id_venda,
-                total=total,
-                desconto_aplicado=desconto_aplicado
-            )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=resultado
+                )
 
-        elif "vazio" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Carrinho vazio"
-            )
-
-        elif "não encontrado" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Cliente não encontrado"
-            )
-
-        elif "inativo" in resultado.lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cliente inativo não pode realizar compras"
-            )
-
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=resultado
-            )
+        endpoint_vendas_log.info(
+            f"Venda finalizada com sucesso - "
+            f"ID: {dados_venda['id_venda']}, "
+            f"Total: R$ {dados_venda['total']:.2f}"
+        )
+        return FinalizarVendaResponse(
+            success=True,
+            message="Venda finalizada com sucesso",
+            id_venda=dados_venda['id_venda'],
+            total=dados_venda['total'],
+            desconto_aplicado=dados_venda.get('desconto', 0.0),
+        )
 
     except HTTPException:
         raise
@@ -363,7 +374,8 @@ async def finalizar_venda(venda: FinalizarVendaRequest, controller: VendaControl
 
 )
 async def cancelar_venda(controller: VendaController = Depends(get_venda_controller),
-                         user: dict = Depends(require_admin_or_gerente)):
+                         db: Session = Depends(get_db),
+                         user: dict = Depends(require_vendedor_or_above)):
     """
     ## Cancela a venda atual e limpa o carrinho
 
@@ -384,25 +396,25 @@ async def cancelar_venda(controller: VendaController = Depends(get_venda_control
     try:
         endpoint_vendas_log.info("Cancelando venda e limpando carrinho")
 
-        resultado = controller.cancelar_venda(user['user_id'])
+        sucesso, resultado = controller.cancelar_carrinho(db=db, usuario_id=user['user_id'])
 
-        if "sucesso" in resultado.lower() or "cancelada" in resultado.lower():
-            return {
-                "success": True,
-                "message": resultado
-            }
+        if not sucesso:
+            if "vazio" in resultado.lower():
+                return {
+                    "success": True,
+                    "message": "Carrinho já estava vazio"
+                }
 
-        elif "vazio" in resultado.lower():
-            return {
-                "success": True,
-                "message": "Carrinho já estava vazio"
-            }
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=resultado
+                )
 
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=resultado
-            )
+        return {
+            "success": True,
+            "message": resultado
+        }
 
     except HTTPException:
         raise

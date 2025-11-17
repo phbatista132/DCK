@@ -1,6 +1,7 @@
-from typing import Optional
 from datetime import datetime
+from sqlalchemy.orm import Session
 from fastapi import APIRouter, status, HTTPException, Query, Depends, Path
+from src.database.connection import get_db
 from src.controllers import EstoqueController
 from src.utils.logKit import get_logger
 from src.api.schemas import EstoqueReposicaoResponse, EstoqueReposicaoRequest, DisponibilidadeResponse, ReservasResponse
@@ -20,14 +21,13 @@ endpoint_estoque_log = get_logger("LoggerEstoque", "WARNING")
     "/{id_produto}/replenish",
     status_code=status.HTTP_200_OK,
     response_model=EstoqueReposicaoResponse,
-    dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)],
     summary="Repor estoque de um produto"
 )
-async def repor_estoque(
-        id_produto: int = Path(...,gt=0, description="ID do produto a ser reposto"),
-        reposicao: EstoqueReposicaoRequest = ...,
-        controller: EstoqueController = Depends(get_estoque_controller)
-) -> EstoqueReposicaoResponse:
+async def repor_estoque(id_produto: int = Path(..., gt=0, description="ID do produto a ser reposto"),
+                        db: Session = Depends(get_db),
+                        reposicao: EstoqueReposicaoRequest = ...,
+                        controller: EstoqueController = Depends(get_estoque_controller),
+                        user: dict = Depends(require_admin_or_gerente)) -> EstoqueReposicaoResponse:
     """
     ## Repõe estoque de um produto ativo
 
@@ -48,7 +48,7 @@ async def repor_estoque(
             f"Reposição solicitada - Produto: {id_produto}, Quantidade: {reposicao.quantidade}"
         )
 
-        resultado = controller.repor_estoque(id_produto, reposicao.quantidade)
+        resultado = controller.repor_estoque(db, id_produto, reposicao.quantidade, usuario_id=user['user_id'])
 
         if "sucesso" in resultado.lower():
             return EstoqueReposicaoResponse(
@@ -94,17 +94,12 @@ async def repor_estoque(
     "/reservations",
     status_code=status.HTTP_200_OK,
     response_model=ReservasResponse,
-    dependencies=[Depends(get_current_user), Depends(require_vendedor_or_above)],
     summary="Consultar reservas de estoque"
 )
-async def obter_info_reservas(
-        id_produto: Optional[int] = Query(
-            None,
-            gt=0,
-            description="ID do produto (opcional)"
-        ),
-        controller: EstoqueController = Depends(get_estoque_controller)
-) -> ReservasResponse:
+async def obter_reservas_usuario(
+        controller: EstoqueController = Depends(get_estoque_controller),
+        db: Session = Depends(get_db),
+        user: dict = Depends(get_current_user)) -> ReservasResponse:
     """
     ## Consulta informações sobre reservas de estoque
 
@@ -117,11 +112,11 @@ async def obter_info_reservas(
     Em produção, deveria exigir autenticação de administrador.
     """
     try:
-        resultado = controller.obter_info_reservas(id_produto)
+        resultado = controller.obter_reservas_usuario(db, user['user_id'])
 
         # Enriquecer dados com tempo restante
         reservas_enriquecidas = {}
-        for pid, dados in resultado.items():
+        for pid, dados in resultado:
             expira_em_str = dados.get("expira_em")
             tempo_restante = None
 
@@ -156,12 +151,13 @@ async def obter_info_reservas(
     "/{id_produto}/availability",
     status_code=status.HTTP_200_OK,
     response_model=DisponibilidadeResponse,
-    dependencies=[Depends(get_current_user), Depends(require_vendedor_or_above)],
     summary="Verificar disponibilidade de produto"
 )
 async def verificar_disponibilidade(
-        id_produto: int = Path(...,gt=0, description="ID do produto"),
+        id_produto: int = Path(..., gt=0, description="ID do produto"),
         quantidade: int = Query(1, gt=0, description="Quantidade desejada"),
+        user: dict = Depends(get_current_user),
+        db: Session = Depends(get_db),
         controller: EstoqueController = Depends(get_estoque_controller)
 ) -> DisponibilidadeResponse:
     """
@@ -175,7 +171,7 @@ async def verificar_disponibilidade(
     ```
     """
     try:
-        habilitado, msg_habilitado = controller.produto_habilitado(id_produto)
+        habilitado, msg_habilitado = controller.produto_habilitado(db, id_produto)
 
         if not habilitado:
             if "não localizado" in msg_habilitado.lower():
@@ -184,7 +180,10 @@ async def verificar_disponibilidade(
                     detail=f"Produto {id_produto} não encontrado"
                 )
 
-        disponivel, qtd_disponivel = controller.verificar_disponibilidade(id_produto, quantidade)
+        disponivel, qtd_disponivel = controller.verificar_disponibilidade(db,
+                                                                          id_produto,
+                                                                          quantidade,
+                                                                          user['usename'])
 
         return DisponibilidadeResponse(
             success=True,

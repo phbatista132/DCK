@@ -9,7 +9,6 @@ class EstoqueController:
     def __init__(self):
         self.estoque_log = get_logger("LoggerEstoqueController", "DEBUG")
 
-
     def _limpar_reservas_expiradas(self, db: Session) -> int:
         """
         Remove reservas expiradas do banco
@@ -111,7 +110,7 @@ class EstoqueController:
             self.estoque_log.exception("Erro ao verificar produto")
             return False, f'Erro: {e}'
 
-    def verificar_disponibilidade(self, db: Session, produto_id: int, quantidade: int) -> tuple[bool, int]:
+    def verificar_disponibilidade(self, db: Session, produto_id: int, quantidade: int, usuario: int) -> tuple[bool, int]:
         """
         Verifica disponibilidade real considerando reservas
 
@@ -124,10 +123,11 @@ class EstoqueController:
             produto = db.query(Produtos).filter(Produtos.codigo == produto_id).first()
 
             if not produto:
+                self.estoque_log.warning(f"Produto não localizado em estoque")
                 return False, 0
 
             quantidade_disponivel = produto.quantidade_estoque - produto.quantidade_reservada
-
+            self.estoque_log.info(f"Produto verificado: {produto.nome} Usuario:{usuario} ")
             return quantidade_disponivel >= quantidade, quantidade_disponivel
 
         except Exception:
@@ -355,10 +355,8 @@ class EstoqueController:
             # Limpar expiradas primeiro
             self._limpar_reservas_expiradas(db)
 
-            reservas = db.query(Reserva).filter(
-                Reserva.usuario_id == usuario_id,
-                Reserva.ativa == True
-            ).order_by(Reserva.data_criacao.desc()).all()
+            reservas = db.query(Reserva).filter(Reserva.usuario_id == usuario_id, Reserva.ativa == True).order_by(
+                Reserva.data_criacao.desc()).all()
 
             return reservas
 

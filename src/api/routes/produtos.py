@@ -4,7 +4,9 @@ from src.api.schemas.produto_schema import ProdutoUpdate
 from src.controllers import ProdutoController
 from src.utils.logKit import get_logger
 from src.api.schemas import ProdutoCreated
-from src.api.middleware import get_current_user, require_admin_or_gerente, require_vendedor_or_above
+from src.api.middleware import require_admin_or_gerente
+from src.database.connection import get_db
+from sqlalchemy.orm import Session
 
 produtos_router = APIRouter(prefix="/products", tags=["products"])
 endpoint_produtos_log = get_logger("LoggerProduto", "WARNING")
@@ -15,9 +17,10 @@ def get_produto_controller() -> ProdutoController:
     return ProdutoController()
 
 
-@produtos_router.post("/", status_code=status.HTTP_201_CREATED,
-                      dependencies=[Depends(require_admin_or_gerente), Depends(get_current_user)])
-async def cadastrar_produto(produto: ProdutoCreated, controller: ProdutoController = Depends(get_produto_controller)):
+@produtos_router.post("/", status_code=status.HTTP_201_CREATED, summary="Cadastra novo produto", )
+async def cadastrar_produto(produto: ProdutoCreated, user: dict = Depends(require_admin_or_gerente),
+                            db: Session = Depends(get_db),
+                            controller: ProdutoController = Depends(get_produto_controller)):
     """
     Cadastra um novo produto no sistema
 
@@ -28,7 +31,7 @@ async def cadastrar_produto(produto: ProdutoCreated, controller: ProdutoControll
 
     """
     try:
-        resultado = controller.cadastrar_produto(**produto.model_dump())
+        resultado = controller.cadastrar_produto(db, **produto.model_dump())
 
         if "sucesso" in resultado:
             return {"message": resultado}
@@ -42,9 +45,9 @@ async def cadastrar_produto(produto: ProdutoCreated, controller: ProdutoControll
         raise HTTPException(status_code=500, detail=f"Erro interno ao cadastrar produto: {str(e)}")
 
 
-@produtos_router.patch("/{id_produto}", status_code=status.HTTP_200_OK,
-                       dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
+@produtos_router.patch("/{id_produto}", status_code=status.HTTP_200_OK)
 async def atualizar_produto(id_produto: int, produto: ProdutoUpdate,
+                            db: Session = Depends(get_db), user: dict = Depends(require_admin_or_gerente),
                             controller: ProdutoController = Depends(get_produto_controller)):
     """
     Editar dados de um produto no sistema
@@ -64,7 +67,7 @@ async def atualizar_produto(id_produto: int, produto: ProdutoUpdate,
         if not dados_atualizados:
             raise HTTPException(status_code=400, detail="Nenhum produto atualizado")
 
-        resultado = controller.editar_produto(id_produto, **dados_atualizados)
+        resultado = controller.editar_produto(db, id_produto, **dados_atualizados)
         if "sucesso" in resultado:
             return {"message": resultado}
         elif "não encontrado" in resultado:
@@ -81,9 +84,9 @@ async def atualizar_produto(id_produto: int, produto: ProdutoUpdate,
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@produtos_router.get("/search", status_code=status.HTTP_200_OK,
-                     dependencies=[Depends(get_current_user), Depends(require_vendedor_or_above)])
-async def buscar_produto(nome: Optional[str] = Query(None, description="Buscar por nome"),
+@produtos_router.get("/search", status_code=status.HTTP_200_OK)
+async def buscar_produto(db: Session = Depends(get_db),
+                         nome: Optional[str] = Query(None, description="Buscar por nome"),
                          categoria: Optional[str] = Query(None, description="Buscar por categoria"),
                          modelo: Optional[str] = Query(None, description="Buscar por modelo"),
                          controller: ProdutoController = Depends(get_produto_controller)
@@ -100,11 +103,11 @@ async def buscar_produto(nome: Optional[str] = Query(None, description="Buscar p
     try:
 
         if nome:
-            resultado = controller.busca_produto('nome', nome)
+            resultado = controller.busca_produto(db, 'nome', nome)
         elif categoria:
-            resultado = controller.filtro_categoria(categoria)
+            resultado = controller.filtro_categoria(db, categoria)
         elif modelo:
-            resultado = controller.busca_produto('modelo', modelo)
+            resultado = controller.busca_produto(db, 'modelo', modelo)
         else:
             raise HTTPException(status_code=400, detail="Forneça ao menos um filtro:  nome, categoria ou modelo")
 
@@ -120,9 +123,9 @@ async def buscar_produto(nome: Optional[str] = Query(None, description="Buscar p
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@produtos_router.delete("/{id_produto}", status_code=status.HTTP_202_ACCEPTED,
-                        dependencies=[Depends(get_current_user), Depends(require_admin_or_gerente)])
-async def desabilitar_produto(id_produto: int, controller: ProdutoController = Depends(get_produto_controller)):
+@produtos_router.delete("/{id_produto}", status_code=status.HTTP_202_ACCEPTED)
+async def desabilitar_produto(id_produto: int, db:Session = Depends(get_db), controller: ProdutoController = Depends(get_produto_controller),
+                              user: dict = Depends(require_admin_or_gerente)):
     """
     Desabilitar produto (soft delete)
 
@@ -130,7 +133,7 @@ async def desabilitar_produto(id_produto: int, controller: ProdutoController = D
     Produtos inativos não aparecem em buscas.
     """
     try:
-        resultado = controller.desabilitar_produto(id_produto)
+        resultado = controller.desabilitar_produto(db, id_produto)
 
         if "sucesso" in resultado:
             return {"message": resultado,
