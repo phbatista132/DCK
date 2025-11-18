@@ -162,6 +162,6 @@ async def list_clients(
 
         return resultado[skip: skip + limit]
 
-    except Exception as e:
+    except Exception:
         endpoint_cliente_log.exception("Erro ao listar clientes")
         raise HTTPException(status_code=500, detail="Erro interno ao listar_clientes")

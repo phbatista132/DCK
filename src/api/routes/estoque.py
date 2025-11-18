@@ -180,10 +180,10 @@ async def verificar_disponibilidade(
                     detail=f"Produto {id_produto} não encontrado"
                 )
 
-        disponivel, qtd_disponivel = controller.verificar_disponibilidade(db,
-                                                                          id_produto,
-                                                                          quantidade,
-                                                                          user['usename'])
+        disponivel, qtd_disponivel = controller.verificar_disponibilidade(db=db,
+                                                                          produto_id=id_produto,
+                                                                          quantidade=quantidade,
+                                                                          usuario=user['user_id'])
 
         return DisponibilidadeResponse(
             success=True,
