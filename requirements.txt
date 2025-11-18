@@ -27,6 +27,10 @@ pydantic==2.5.0
 pydantic[email]==2.5.0
 email-validator==2.1.0
 python-dateutil==2.8.2
+PyJWT==2.8.0
+
+# ======================== DADOS ======================
+pandas==2.1.4
 
 # ==================== SERVIDOR ====================
 gunicorn==21.2.0
