@@ -1,50 +1,167 @@
+# ==================== AMBIENTE ====================
 # Ambiente virtual
 venv/
+.venv/
+env/
+ENV/
+
+# Variáveis de ambiente (CRÍTICO: NUNCA COMMITAR)
 .env
-*.env.example
 *.env
+!.env.example  # EXCETO .env.example (esse pode)
 
-
-
-# Arquivos de configuração e credenciais
-*.sqlite3
-*.db
+# ==================== PYTHON ====================
+# Bytecode
 __pycache__/
 *.py[cod]
-*.log
-
-# Diretórios de IDEs
-.vscode/
-.idea/
-
-# Arquivos de sistema
-.DS_Store
-Thumbs.db
-
-# Compilados e caches
+*$py.class
 *.so
-*.egg
-*.egg-info/
-dist/
-build/
-*.pyd
 
-# Testes e relatórios
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==================== BANCO DE DADOS ====================
+# SQLite local (desenvolvimento)
+*.sqlite3
+*.db
+
+# Arquivos de dados sensíveis
+data/*.db
+data/*.sqlite3
+data/.secret_key
+
+# ⚠️ IMPORTANTE: NÃO IGNORAR alembic/
+# alembic/ deve ser commitado (migrations são parte do código)
+
+# ==================== IDES ====================
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ==================== SISTEMA OPERACIONAL ====================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ==================== LOGS ====================
+# Arquivos de log
+*.log
+logs/*.log
+logs/*.jsonl
+
+# MAS manter a pasta logs/
+!logs/.gitkeep
+
+# ==================== TESTES ====================
+# Coverage
 htmlcov/
 .coverage
-.tox/
+.coverage.*
+.cache
+coverage.xml
+*.cover
+.hypothesis/
 .pytest_cache/
 
-# Arquivos temporários
+# Tox
+.tox/
+
+# ==================== DOCUMENTAÇÃO ====================
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Sphinx documentation
+docs/_build/
+
+# ==================== ARQUIVOS TEMPORÁRIOS ====================
 *.bak
 *.swp
+*.swo
 *.tmp
 
-# Arquivos de exportação
+
+# ==================== EXPORTAÇÕES ====================
+# Arquivos de exportação (relatórios)
 *.csv
 *.xlsx
 *.pdf
 *.docx
 
+# EXCETO exemplos e templates
+!examples/*.csv
+!templates/*.xlsx
+
+# ==================== PERFORMANCE ====================
 # Benchmarks
 .benchmarks/
+
+# ==================== SECRETS ====================
+# Chaves privadas
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Certificados
+*.crt
+*.cer
+
+# ==================== ESPECÍFICO DO PROJETO ====================
+# Dados de teste
+test_data/
+*.test.db
+
+# Backups
+backups/
+*.backup
+
+# ==================== NOTAS IMPORTANTES ====================
+# ✅ O QUE DEVE SER COMMITADO:
+# - alembic/ (pasta completa com migrations)
+# - alembic/env.py
+# - alembic/versions/*.py
+# - .env.example
+# - requirements.txt
+# - Procfile
+# - README.md
+#
+# ❌ O QUE NUNCA DEVE SER COMMITADO:
+# - .env (contém secrets)
+# - *.db (bancos locais)
+# - data/.secret_key
+# - __pycache__/
+# - logs/*.log
