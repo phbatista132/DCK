@@ -3,7 +3,7 @@ Schemas Pydantic para validação de dados
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
-from datetime import date
+from datetime import datetime
 
 
 class ClienteCreate(BaseModel):
@@ -49,11 +49,11 @@ class ClienteResponse(BaseModel):
     id_cliente: int
     nome: str
     cpf: str
-    dt_nascimento: date
+    dt_nascimento: datetime
     telefone: str
     endereco: str
     ativo: bool
-    data_cadastro: Optional[date] = None
+    data_cadastro: Optional[datetime] = None
 
     class Config:
         from_attributes = True
