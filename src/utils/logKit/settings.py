@@ -1,11 +1,12 @@
 from collections.abc import Callable
 from os import getenv
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypeVar
 from dotenv import load_dotenv
 
+T = TypeVar("T")
 load_dotenv(".env")
-type LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 ALLOWED_LEVELS: set[LogLevel] = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
 
@@ -25,8 +26,6 @@ def validate_path_file(path: Path) -> Path:
     if not path.exists() or not path.is_file():
         raise FileNotFoundError(f"Path {path} is not a file")
     return path
-
-
 
 
 def validate_level(level: str) -> LogLevel:
