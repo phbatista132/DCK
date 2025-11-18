@@ -76,7 +76,7 @@ def upgrade() -> None:
     op.create_index('idx_item_carrinho', 'itens_carrinho', ['carrinho_id'], unique=False)
     op.create_index(op.f('ix_itens_carrinho_carrinho_id'), 'itens_carrinho', ['carrinho_id'], unique=False)
     op.create_index(op.f('ix_itens_carrinho_produto_id'), 'itens_carrinho', ['produto_id'], unique=False)
-    op.add_column('produtos', sa.Column('quantidade_reservada', sa.Integer(), nullable=False))
+    op.add_column('produtos', sa.Column('quantidade_reservada', sa.Integer(), nullable=False, server_default='0'))
     # ### end Alembic commands ###
 
 
