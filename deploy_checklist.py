@@ -73,20 +73,20 @@ def main():
     print(f"\n{Color.BLUE}📦 3. Verificando Dependências{Color.END}")
     print("-" * 60)
 
-    required_packages = [
-        "fastapi",
-        "uvicorn",
-        "sqlalchemy",
-        "alembic",
-        "pydantic",
-        "python-jose",
-        "bcrypt",
-        "psycopg2-binary",
-    ]
+    required_packages = {
+        "fastapi": "fastapi",
+        "uvicorn": "uvicorn",
+        "sqlalchemy": "sqlalchemy",
+        "alembic": "alembic",
+        "pydantic": "pydantic",
+        "python-jose": "jose",
+        "bcrypt": "bcrypt",
+        "psycopg2-binary": "psycopg2",
+    }
 
-    for package in required_packages:
+    for package, module in required_packages.items():
         try:
-            __import__(package.replace("-", "_"))
+            __import__(module)
             check(True, f"{package} instalado")
         except ImportError:
             all_ok &= check(False, f"{package} NÃO instalado", True)
@@ -148,7 +148,7 @@ def main():
     # Verificar .gitignore
     gitignore = Path(".gitignore")
     if gitignore.exists():
-        content = gitignore.read_text()
+        content = gitignore.read_text(encoding="utf-8")
         checks = [
             (".env" in content, ".env no .gitignore"),
             ("__pycache__" in content, "__pycache__ no .gitignore"),
