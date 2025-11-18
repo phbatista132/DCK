@@ -10,7 +10,7 @@ LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 ALLOWED_LEVELS: set[LogLevel] = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
 
-def define_setting[T](value: T, validator: Callable[[T], T] | None = None) -> T:
+def define_setting(value: T, validator: Callable[[T], T] | None = None) -> T:
     if validator is not None:
         return validator(value)
     return value
