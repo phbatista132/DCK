@@ -1,38 +1,47 @@
-# Framework Web
-Flask==3.0.0
-flask-cors==4.0.0
+# ==================== WEB FRAMEWORK ====================
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
 
-# Dados
-pandas==2.1.4
+# ==================== CORS ====================
+fastapi-cors==0.0.6
 
-# Validações
-python-dateutil==2.8.2
-
-# Logs (já tem o LogKit)
-
-# Testes
-pytest==7.4.3
-pytest-cov==4.1.0
-pytest-flask==1.3.0
-
-# Deploy
-gunicorn==21.2.0
-python-dotenv==1.0.0
-
-# Banco de dados
+# ==================== DATABASE ====================
 sqlalchemy==2.0.23
 alembic==1.13.1
 
-# Drivers de banco
-psycopg2-binary==2.9.9  # PostgreSQL
-pymysql==1.1.0          # MySQL (opcional)
+# PostgreSQL
+psycopg2-binary==2.9.9
 
-# Async (opcional, para FastAPI async)
-asyncpg==0.29.0         # PostgreSQL async
-databases==0.8.0        # Async database support
+# MySQL (opcional)
+pymysql==1.1.0
 
+# ==================== SEGURANÇA ====================
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.1.1
+python-dotenv==1.0.0
 
-## 🚀 **8. Procfile** (Para Railway)
-```
-# Procfile
-web: gunicorn src.api.app:create_app()
+# ==================== VALIDAÇÃO ====================
+pydantic==2.5.0
+pydantic[email]==2.5.0
+email-validator==2.1.0
+python-dateutil==2.8.2
+
+# ==================== DADOS ====================
+pandas==2.1.4
+
+# ==================== SERVIDOR ====================
+gunicorn==21.2.0
+
+# ==================== RATE LIMITING ====================
+slowapi==0.1.9
+
+# ==================== TESTES ====================
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-asyncio==0.21.1
+
+# ==================== DESENVOLVIMENTO ====================
+# Remover em produção se necessário
+rich==13.7.0
