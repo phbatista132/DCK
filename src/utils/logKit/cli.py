@@ -33,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def write_file(
-    path: Path, data: str, mode: str = "r", encoding: str | None = "utf8"
+        path: Path, data: str, mode: str = "r", encoding: str | None = "utf8"
 ) -> None:
     with path.open(mode, encoding=encoding) as file:
         file.write(data)
@@ -114,9 +114,7 @@ def write_json(path: Path) -> Path:
             "handlers": {
                 "queue": {
                     "class": "logging.handlers.QueueHandler",
-                    # NOTE: dictConfig cannot create a QueueListener automatically.
-                    # We attach a QueueListener in code (config_logging._setup_logging).
-                    # The QueueHandler created here will use a queue internally.
+                    "queue": "ext://queue.Queue"
                 },
                 "console": {
                     "()": "src.utils.logKit.handlers.MyRichHandler",
