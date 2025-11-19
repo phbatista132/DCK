@@ -17,7 +17,10 @@ def define_setting(value: T, validator: Callable[[T], T] | None = None) -> T:
 
 
 def validate_path_dir(path: Path) -> Path:
-    if not path.exists() or not path.is_dir():
+    # MUDANÇA: Criar diretório se não existir (para Railway)
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+    if not path.is_dir():
         raise NotADirectoryError(f"Path {path} is not a directory")
     return path
 
@@ -35,8 +38,8 @@ def validate_level(level: str) -> LogLevel:
     return level
 
 
-# Defaults: note the env var names should match the CLI output
-root_dir = Path(".").resolve()
+# MUDANÇA: Usar Path.cwd() ao invés de Path(".")
+root_dir = Path.cwd()
 logs_dir = root_dir / getenv("LOGS_DIR", "logs")
 logging_config_json = root_dir / getenv("LOGGING_CONFIG_JSON", "logging.conf.json")
 
@@ -54,15 +57,24 @@ def validate() -> None:
     """
     global root_dir, logs_dir, logging_config_json, setup_logger_name, setup_logger_level, default_logger_level
 
+    # MUDANÇA: Não validar root_dir (pode não existir no Railway)
     # validate root dir exists
-    root_dir = define_setting(root_dir, validator=validate_path_dir)
+    # root_dir = define_setting(root_dir, validator=validate_path_dir)
 
-    # set logs_dir (do not require it exists here; creation happens later)
+    # set logs_dir (criar se não existir)
     logs_dir = root_dir / getenv("LOGS_DIR", "logs")
 
-    # logging config file (this will raise if not found)
-    logging_config_json = define_setting(root_dir / getenv("LOGGING_CONFIG_JSON", "logging.conf.json"),
-                                         validator=validate_path_file)
+    # MUDANÇA: Criar logs_dir se não existir
+    if not logs_dir.exists():
+        logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # MUDANÇA: Verificar se arquivo de config existe, se não, usar configuração padrão
+    config_path = root_dir / getenv("LOGGING_CONFIG_JSON", "logging.conf.json")
+    if config_path.exists():
+        logging_config_json = define_setting(config_path, validator=validate_path_file)
+    else:
+        # Se não existir, criar configuração mínima
+        logging_config_json = config_path
 
     setup_logger_name = getenv("SETUP_LOGGER_NAME", "config_setup")
 
