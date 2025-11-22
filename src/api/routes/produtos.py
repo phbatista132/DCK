@@ -150,3 +150,16 @@ async def desabilitar_produto(id_produto: int, db:Session = Depends(get_db), con
     except Exception as e:
         endpoint_produtos_log.error(f"Erro ao desabilitar produto: {id_produto}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@produtos_router.get("/contar")
+async def contar_produtos(db: Session = Depends(get_db), controller: ProdutoController = Depends(get_produto_controller)):
+    try:
+        resultado =controller.contar_produtos(db)
+
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as e:
+        endpoint_produtos_log.error(f"Erro ao contar produtos")
+        raise HTTPException(status_code=500, detail=str(e))
