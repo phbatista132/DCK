@@ -142,7 +142,7 @@ class ProdutoController:
     def filtro_categoria(self, db: Session, categoria: str) -> str:
         """Filtra produtos por categoria"""
         try:
-            produtos = db.query(Produtos).filter(Produtos.categoria == categoria, Produtos.ativo == True).all()
+            produtos = db.query(Produtos).filter(Produtos.categoria == categoria, Produtos.ativo.is_(True)).all()
 
             if not produtos:
                 return f"Nenhum produto encontrado na categoria: {categoria}"
@@ -160,3 +160,12 @@ class ProdutoController:
         except Exception as e:
             self.produto_log.warning("Erro ao filtrar categoria")
             return f'Erro ao filtrar: {e}'
+
+    def contar_produtos(self, db: Session) -> int:
+        try:
+            qtd_produtos = db.query(Produtos).filter(Produtos.ativo.is_(True)).count()
+
+            return qtd_produtos
+        except Exception as e:
+            self.produto_log.exception(f"Erro ao verificar prdutos: {e}")
+            return 0

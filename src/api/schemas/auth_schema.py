@@ -22,14 +22,14 @@ class UsuarioRegistro(BaseModel):
 
 class UsuarioLogin(BaseModel):
     """Schema para login"""
-    username: str = Field(..., min_length=3, description="Nome de usuario")
-    senha: str = Field(..., min_length=8, description="Senha")
+    username: str = Field(..., min_length=3, description="Username")
+    senha: str = Field(..., min_length=8, description="Password")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "username": "joao.silva",
-                "senha": "SenhaSegura123!"
+                "password": "SenhaSegura123!"
             }
         }
 class TokenResponse(BaseModel):
